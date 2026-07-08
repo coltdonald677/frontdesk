@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FrontDesk — AI Chief Operating Officer for Small Business",
+  title: "Pluto — AI Chief Operating Officer for Small Business",
   description:
-    "FrontDesk handles scheduling, customers, invoices, follow-ups, and daily priorities so small business owners can focus on growth.",
+    "Pluto handles scheduling, customers, invoices, follow-ups, and daily priorities so small business owners can focus on growth.",
 };
 
 export default function RootLayout({

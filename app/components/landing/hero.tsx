@@ -31,7 +31,7 @@ export function Hero() {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-400 sm:text-xl">
-          FrontDesk runs scheduling, customers, invoices, follow-ups, and daily
+          Pluto runs scheduling, customers, invoices, follow-ups, and daily
           priorities — so you can stop juggling tools and start growing your
           business.
         </p>

@@ -1,7 +1,7 @@
 const testimonials = [
   {
     quote:
-      "FrontDesk replaced four different tools for my salon. I save at least 10 hours a week and my no-show rate dropped 40%.",
+      "Pluto replaced four different tools for my salon. I save at least 10 hours a week and my no-show rate dropped 40%.",
     author: "Maria Chen",
     role: "Owner, Bloom Studio",
     initials: "MC",

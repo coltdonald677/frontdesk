@@ -11,7 +11,7 @@ export function DashboardMockup() {
             <div className="h-3 w-3 rounded-full bg-zinc-700" />
           </div>
           <div className="mx-auto flex h-7 w-64 items-center justify-center rounded-md bg-zinc-800/80 text-xs text-zinc-500">
-            app.frontdesk.ai/dashboard
+            app.pluto.ai/dashboard
           </div>
         </div>
 
@@ -20,7 +20,7 @@ export function DashboardMockup() {
           <aside className="hidden w-52 shrink-0 border-r border-white/[0.06] p-4 sm:block">
             <div className="mb-6 flex items-center gap-2">
               <div className="h-7 w-7 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600" />
-              <span className="text-sm font-medium text-white">FrontDesk</span>
+              <span className="text-sm font-medium text-white">Pluto</span>
             </div>
             <nav className="space-y-1">
               {[

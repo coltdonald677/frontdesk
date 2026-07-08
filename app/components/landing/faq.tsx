@@ -1,18 +1,18 @@
 const faqs = [
   {
-    question: "What exactly does FrontDesk do?",
+    question: "What exactly does Pluto do?",
     answer:
-      "FrontDesk acts as your AI Chief Operating Officer — it manages scheduling, customer relationships, invoicing, follow-ups, and daily priorities from one dashboard. Think of it as the operational brain of your business.",
+      "Pluto acts as your AI Chief Operating Officer — it manages scheduling, customer relationships, invoicing, follow-ups, and daily priorities from one dashboard. Think of it as the operational brain of your business.",
   },
   {
     question: "How is this different from a CRM or calendar app?",
     answer:
-      "CRMs and calendars are single-purpose tools. FrontDesk connects everything together and uses AI to prioritize what you should do next, proactively suggest actions, and automate repetitive operational work.",
+      "CRMs and calendars are single-purpose tools. Pluto connects everything together and uses AI to prioritize what you should do next, proactively suggest actions, and automate repetitive operational work.",
   },
   {
     question: "Do I need technical skills to set it up?",
     answer:
-      "Not at all. Most businesses are fully onboarded in under 15 minutes. Connect your calendar, import your contacts, and FrontDesk starts learning your business patterns immediately.",
+      "Not at all. Most businesses are fully onboarded in under 15 minutes. Connect your calendar, import your contacts, and Pluto starts learning your business patterns immediately.",
   },
   {
     question: "Is my business data secure?",
@@ -25,9 +25,9 @@ const faqs = [
       "Absolutely. There are no long-term contracts. Cancel your subscription anytime from your account settings with no cancellation fees.",
   },
   {
-    question: "What kind of businesses use FrontDesk?",
+    question: "What kind of businesses use Pluto?",
     answer:
-      "FrontDesk is built for small service businesses — salons, consultants, contractors, property managers, fitness studios, and any owner-operator juggling clients, schedules, and invoices.",
+      "Pluto is built for small service businesses — salons, consultants, contractors, property managers, fitness studios, and any owner-operator juggling clients, schedules, and invoices.",
   },
 ];
 

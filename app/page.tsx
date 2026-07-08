@@ -25,7 +25,7 @@ export default function Home() {
             </h2>
             <p className="mt-4 text-lg text-zinc-400">
               Join 2,400+ small businesses already running smarter with
-              FrontDesk.
+              Pluto.
             </p>
             <a
               href="#"
