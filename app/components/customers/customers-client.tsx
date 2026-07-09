@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -58,6 +59,10 @@ export function CustomersClient({ customers }: CustomersClientProps) {
   const openEditModal = (customer: Customer) => {
     setEditingCustomer(customer);
     setModalOpen(true);
+  };
+
+  const openCustomerWorkspace = (customerId: string) => {
+    router.push(`/dashboard/customers/${customerId}`);
   };
 
   const closeModal = () => {
@@ -217,7 +222,7 @@ export function CustomersClient({ customers }: CustomersClientProps) {
                   <tr
                     key={customer.id}
                     className="cursor-pointer transition-colors hover:bg-white/[0.03]"
-                    onClick={() => openEditModal(customer)}
+                    onClick={() => openCustomerWorkspace(customer.id)}
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
@@ -248,6 +253,12 @@ export function CustomersClient({ customers }: CustomersClientProps) {
                     </td>
                     <td className="px-5 py-4" onClick={(event) => event.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/dashboard/customers/${customer.id}`}
+                          className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+                        >
+                          View
+                        </Link>
                         <button
                           type="button"
                           onClick={() => openEditModal(customer)}

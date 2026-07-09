@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { EmptyState } from "@/app/components/ui/empty-state";
+import { EmployeeSelect } from "@/app/components/employees/employee-select";
 import { AppointmentDetailModal } from "@/app/components/schedule/appointment-detail-modal";
+import { getActiveEmployeesAction } from "@/app/dashboard/employees/actions";
 import {
   createAppointment,
   getCustomerAppointmentsAction,
@@ -21,12 +23,14 @@ import {
   formatTimeDisplay,
 } from "@/lib/appointments/datetime";
 import type { Customer } from "@/lib/customers/types";
+import type { Employee } from "@/lib/employees/types";
 import {
   panelFormClass,
   panelHeaderClass,
   panelListClass,
   panelLoadingClass,
   panelRootClass,
+  workspaceListClass,
 } from "./panel-styles";
 
 const inputClassName =
@@ -36,15 +40,22 @@ const labelClassName = "mb-1.5 block text-sm font-medium text-zinc-300";
 
 type CustomerAppointmentsPanelProps = {
   customer: Customer;
+  variant?: "embedded" | "workspace";
+  includeAll?: boolean;
 };
 
 export function CustomerAppointmentsPanel({
   customer,
+  variant = "embedded",
+  includeAll = false,
 }: CustomerAppointmentsPanelProps) {
   const router = useRouter();
+  const isWorkspace = variant === "workspace";
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
+  const [showForm, setShowForm] = useState(!isWorkspace);
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
   const [isLoading, startLoadTransition] = useTransition();
@@ -56,7 +67,9 @@ export function CustomerAppointmentsPanel({
 
   const loadAppointments = () => {
     startLoadTransition(async () => {
-      const result = await getCustomerAppointmentsAction(customer.id);
+      const result = await getCustomerAppointmentsAction(customer.id, {
+        includeAll,
+      });
 
       if (result.error) {
         setLoadError(result.error);
@@ -70,12 +83,23 @@ export function CustomerAppointmentsPanel({
 
   useEffect(() => {
     loadAppointments();
-  }, [customer.id]);
+  }, [customer.id, includeAll]);
+
+  useEffect(() => {
+    getActiveEmployeesAction().then((result) => {
+      if (!result.error) {
+        setEmployees(result.employees ?? []);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (state.success && !handledSuccess.current) {
       handledSuccess.current = true;
       setFormKey((current) => current + 1);
+      if (isWorkspace) {
+        setShowForm(false);
+      }
       loadAppointments();
       router.refresh();
     }
@@ -86,14 +110,47 @@ export function CustomerAppointmentsPanel({
   }, [state.success]);
 
   return (
-    <div className={panelRootClass}>
-      <div className={panelHeaderClass}>
-        <h3 className="text-sm font-semibold text-white">Appointments</h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          Upcoming scheduled visits for {customer.name}.
-        </p>
+    <div className={isWorkspace ? "" : panelRootClass}>
+      <div
+        className={
+          isWorkspace
+            ? "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+            : panelHeaderClass
+        }
+      >
+        <div>
+          <h3 className="text-sm font-semibold text-white">Appointments</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            {includeAll
+              ? `All appointments for ${customer.name}.`
+              : `Upcoming scheduled visits for ${customer.name}.`}
+          </p>
+        </div>
+        {isWorkspace && (
+          <button
+            type="button"
+            onClick={() => setShowForm((current) => !current)}
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4.5v15m7.5-7.5h-15"
+              />
+            </svg>
+            Schedule appointment
+          </button>
+        )}
       </div>
 
+      {showForm && (
       <form key={formKey} action={formAction} className={panelFormClass}>
         <input type="hidden" name="customer_id" value={customer.id} />
 
@@ -177,7 +234,18 @@ export function CustomerAppointmentsPanel({
 
         <input type="hidden" name="status" value="scheduled" />
 
-        <div className="flex justify-end">
+        <EmployeeSelect employees={employees} />
+
+        <div className="flex justify-end gap-2">
+          {isWorkspace && (
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              Cancel
+            </button>
+          )}
           <button
             type="submit"
             disabled={pending}
@@ -187,8 +255,9 @@ export function CustomerAppointmentsPanel({
           </button>
         </div>
       </form>
+      )}
 
-      <div className={panelListClass}>
+      <div className={isWorkspace ? workspaceListClass : panelListClass}>
         {loadError && (
           <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
             {loadError}
@@ -217,8 +286,23 @@ export function CustomerAppointmentsPanel({
                 />
               </svg>
             }
-            title="No upcoming appointments"
-            description="Schedule a visit using the form above."
+            title={includeAll ? "No appointments yet" : "No upcoming appointments"}
+            description={
+              includeAll
+                ? "Schedule the first appointment for this customer."
+                : "Schedule a visit using the form above."
+            }
+            action={
+              isWorkspace ? (
+                <button
+                  type="button"
+                  onClick={() => setShowForm(true)}
+                  className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+                >
+                  Schedule appointment
+                </button>
+              ) : undefined
+            }
           />
         )}
 
@@ -272,6 +356,7 @@ export function CustomerAppointmentsPanel({
             customers: { name: customer.name, company: customer.company },
           }}
           customers={[customer]}
+          employees={employees}
           defaultCustomerId={customer.id}
           onClose={() => {
             setSelectedAppointment(null);

@@ -14,6 +14,7 @@ import {
 } from "@/lib/appointments/datetime";
 import { getBusinessProfile } from "@/lib/business-profile";
 import { getCustomers } from "@/lib/customers";
+import { getEmployees } from "@/lib/employees";
 import { createClient } from "@/lib/supabase/server";
 
 function getUserDisplay(user: {
@@ -62,11 +63,12 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         ? [getWeekStart(selectedDate), getWeekEnd(selectedDate)]
         : [selectedDate, selectedDate];
 
-  const [appointments, customers] = await Promise.all([
+  const [appointments, customers, employees] = await Promise.all([
     view === "day"
       ? getAppointmentsByDate(profile!.id, selectedDate)
       : getAppointmentsByDateRange(profile!.id, rangeStart, rangeEnd),
     getCustomers(profile!.id),
+    getEmployees(profile!.id),
   ]);
 
   const { displayName, initials } = getUserDisplay(user!);
@@ -89,6 +91,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         <ScheduleClient
           appointments={appointments}
           customers={customers}
+          employees={employees}
           selectedDate={selectedDate}
           view={view}
         />

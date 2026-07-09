@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { DashboardShell } from "../components/dashboard/dashboard-shell";
+import { EmployeeDashboardCards } from "../components/dashboard/employee-dashboard-cards";
+import { TodaysBriefingCard } from "../components/dashboard/todays-briefing-card";
 import { DueDateBadge } from "../components/tasks/due-date-badge";
 import {
   ACTIVITY_TYPE_LABELS,
@@ -9,6 +11,8 @@ import {
 import type { CustomerActivityType } from "@/lib/customer-activities/types";
 import { getCustomerCount } from "@/lib/customers";
 import { getBusinessProfile } from "@/lib/business-profile";
+import { getDailyBriefing } from "@/lib/briefing";
+import { getEmployeeDashboardStats } from "@/lib/employees";
 import {
   getOpenTaskCount,
   getOverdueTaskCount,
@@ -18,13 +22,6 @@ import {
 import type { TaskPriority } from "@/lib/tasks/types";
 import { getTodayIsoDate } from "@/lib/tasks/due-date";
 import { createClient } from "@/lib/supabase/server";
-
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good Morning";
-  if (hour < 17) return "Good Afternoon";
-  return "Good Evening";
-}
 
 function formatDate() {
   return new Date().toLocaleDateString("en-US", {
@@ -248,6 +245,8 @@ export default async function DashboardPage() {
   const { displayName, initials } = getUserDisplay(user!);
 
   const [
+    briefing,
+    employeeStats,
     openTasks,
     overdueTasks,
     customers,
@@ -255,6 +254,8 @@ export default async function DashboardPage() {
     todayPriorities,
     recentActivities,
   ] = await Promise.all([
+    getDailyBriefing(profile!.id, displayName),
+    getEmployeeDashboardStats(profile!.id),
     getOpenTaskCount(profile!.id),
     getOverdueTaskCount(profile!.id),
     getCustomerCount(profile!.id),
@@ -282,12 +283,16 @@ export default async function DashboardPage() {
         <div className="mb-8">
           <p className="text-sm text-zinc-500">{formatDate()}</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            {getGreeting()}, {displayName}
+            Mission Control
           </h1>
           <p className="mt-2 text-zinc-400">
-            Mission Control — here&apos;s what needs your attention today.
+            Your daily briefing and what needs attention.
           </p>
         </div>
+
+        <TodaysBriefingCard briefing={briefing} />
+
+        <EmployeeDashboardCards stats={employeeStats} />
 
         <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard

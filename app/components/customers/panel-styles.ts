@@ -16,3 +16,5 @@ export const panelItemCardClass =
 
 export const panelLoadingClass =
   "flex items-center justify-center py-8 text-sm text-zinc-500";
+
+export const workspaceListClass = "px-6 py-4";

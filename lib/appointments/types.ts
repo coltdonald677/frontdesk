@@ -10,6 +10,7 @@ export type Appointment = {
   id: string;
   business_profile_id: string;
   customer_id: string;
+  employee_id: string | null;
   title: string;
   notes: string | null;
   appointment_date: string;
@@ -22,6 +23,7 @@ export type Appointment = {
 
 export type AppointmentWithCustomer = Appointment & {
   customers: { name: string; company: string | null } | null;
+  employees?: { full_name: string; color: string } | null;
 };
 
 export const STATUS_LABELS: Record<AppointmentStatus, string> = {

@@ -24,7 +24,7 @@ export async function getAppointmentsByDate(
 
   const { data, error } = await supabase
     .from("appointments")
-    .select("*, customers(name, company)")
+    .select("*, customers(name, company), employees(full_name, color)")
     .eq("business_profile_id", businessProfileId)
     .eq("appointment_date", date)
     .order("start_time", { ascending: true });
@@ -45,7 +45,7 @@ export async function getAppointmentsByDateRange(
 
   const { data, error } = await supabase
     .from("appointments")
-    .select("*, customers(name, company)")
+    .select("*, customers(name, company), employees(full_name, color)")
     .eq("business_profile_id", businessProfileId)
     .gte("appointment_date", startDate)
     .lte("appointment_date", endDate)
@@ -67,7 +67,7 @@ export async function getAppointmentById(
 
   const { data, error } = await supabase
     .from("appointments")
-    .select("*, customers(name, company)")
+    .select("*, customers(name, company), employees(full_name, color)")
     .eq("business_profile_id", businessProfileId)
     .eq("id", appointmentId)
     .maybeSingle();
@@ -77,6 +77,23 @@ export async function getAppointmentById(
   }
 
   return (data as AppointmentWithCustomer | null) ?? null;
+}
+
+export async function getCustomerAllAppointments(customerId: string) {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .eq("customer_id", customerId)
+    .order("appointment_date", { ascending: false })
+    .order("start_time", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as Appointment[];
 }
 
 export async function getCustomerUpcomingAppointments(customerId: string) {

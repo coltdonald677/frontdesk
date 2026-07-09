@@ -2,7 +2,9 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { EmptyState } from "@/app/components/ui/empty-state";
+import { EmployeeSelect } from "@/app/components/employees/employee-select";
 import { DueDateBadge } from "@/app/components/tasks/due-date-badge";
+import { getActiveEmployeesAction } from "@/app/dashboard/employees/actions";
 import {
   completeTask,
   createTask,
@@ -16,6 +18,7 @@ import {
   type Task,
   type TaskPriority,
 } from "@/lib/tasks/types";
+import type { Employee } from "@/lib/employees/types";
 import {
   panelFormClass,
   panelHeaderClass,
@@ -24,6 +27,7 @@ import {
   panelLoadingClass,
   panelRootClass,
   panelSectionLabelClass,
+  workspaceListClass,
 } from "./panel-styles";
 
 const inputClassName =
@@ -39,12 +43,19 @@ const PRIORITY_STYLES: Record<TaskPriority, string> = {
 
 type CustomerTasksPanelProps = {
   customerId: string;
+  variant?: "embedded" | "workspace";
 };
 
-export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
+export function CustomerTasksPanel({
+  customerId,
+  variant = "embedded",
+}: CustomerTasksPanelProps) {
+  const isWorkspace = variant === "workspace";
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
+  const [showForm, setShowForm] = useState(!isWorkspace);
   const [isLoading, startLoadTransition] = useTransition();
   const [isCompleting, startCompleteTransition] = useTransition();
   const [state, formAction, pending] = useActionState<TaskActionState, FormData>(
@@ -72,9 +83,20 @@ export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
   }, [customerId]);
 
   useEffect(() => {
+    getActiveEmployeesAction().then((result) => {
+      if (!result.error) {
+        setEmployees(result.employees ?? []);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     if (state.success && !handledSuccess.current) {
       handledSuccess.current = true;
       setFormKey((current) => current + 1);
+      if (isWorkspace) {
+        setShowForm(false);
+      }
       loadTasks();
     }
 
@@ -100,14 +122,45 @@ export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
   const completedTasks = tasks.filter((task) => task.status === "completed");
 
   return (
-    <div className={panelRootClass}>
-      <div className={panelHeaderClass}>
-        <h3 className="text-sm font-semibold text-white">Tasks & reminders</h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          Track follow-ups and to-dos for this customer.
-        </p>
+    <div className={isWorkspace ? "" : panelRootClass}>
+      <div
+        className={
+          isWorkspace
+            ? "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+            : panelHeaderClass
+        }
+      >
+        <div>
+          <h3 className="text-sm font-semibold text-white">Tasks & reminders</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Track follow-ups and to-dos for this customer.
+          </p>
+        </div>
+        {isWorkspace && (
+          <button
+            type="button"
+            onClick={() => setShowForm((current) => !current)}
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4.5v15m7.5-7.5h-15"
+              />
+            </svg>
+            Create task
+          </button>
+        )}
       </div>
 
+      {showForm && (
       <form key={formKey} action={formAction} className={panelFormClass}>
         <input type="hidden" name="customer_id" value={customerId} />
 
@@ -176,7 +229,18 @@ export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
           </div>
         </div>
 
-        <div className="flex justify-end">
+        <EmployeeSelect employees={employees} />
+
+        <div className="flex justify-end gap-2">
+          {isWorkspace && (
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              Cancel
+            </button>
+          )}
           <button
             type="submit"
             disabled={pending}
@@ -186,8 +250,9 @@ export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
           </button>
         </div>
       </form>
+      )}
 
-      <div className={panelListClass}>
+      <div className={isWorkspace ? workspaceListClass : panelListClass}>
         {loadError && (
           <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
             {loadError}
@@ -218,6 +283,17 @@ export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
             }
             title="No tasks yet"
             description="Add a reminder or follow-up above."
+            action={
+              isWorkspace ? (
+                <button
+                  type="button"
+                  onClick={() => setShowForm(true)}
+                  className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+                >
+                  Create task
+                </button>
+              ) : undefined
+            }
           />
         )}
 

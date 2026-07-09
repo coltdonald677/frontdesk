@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getBusinessProfile } from "@/lib/business-profile";
 import {
+  getCustomerAllAppointments,
   getCustomerUpcomingAppointments,
   getAppointmentById,
 } from "@/lib/appointments";
@@ -18,6 +19,7 @@ import {
   isValidTimeRange,
 } from "@/lib/appointments/datetime";
 import { createClient } from "@/lib/supabase/server";
+import { verifyEmployeeOwnership } from "@/app/dashboard/employees/actions";
 
 export type AppointmentActionState = {
   error?: string;
@@ -55,6 +57,7 @@ function parseAppointmentForm(formData: FormData) {
   const startTime = String(formData.get("start_time") ?? "").trim();
   const endTime = String(formData.get("end_time") ?? "").trim();
   const status = String(formData.get("status") ?? "scheduled").trim();
+  const employeeId = String(formData.get("employee_id") ?? "").trim();
 
   return {
     customer_id: customerId,
@@ -64,6 +67,7 @@ function parseAppointmentForm(formData: FormData) {
     start_time: startTime,
     end_time: endTime,
     status,
+    employee_id: employeeId || null,
   };
 }
 
@@ -130,10 +134,17 @@ async function createAppointmentActivity(
   }
 }
 
-function revalidateSchedulePaths() {
+function revalidateSchedulePaths(customerId?: string, employeeId?: string | null) {
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/employees");
   revalidatePath("/dashboard");
+  if (customerId) {
+    revalidatePath(`/dashboard/customers/${customerId}`);
+  }
+  if (employeeId) {
+    revalidatePath(`/dashboard/employees/${employeeId}`);
+  }
 }
 
 export async function createAppointment(
@@ -158,9 +169,22 @@ export async function createAppointment(
     return { error: "Customer not found." };
   }
 
+  if (appointment.employee_id) {
+    const employeeOwned = await verifyEmployeeOwnership(
+      supabase,
+      appointment.employee_id,
+      profile.id,
+    );
+
+    if (!employeeOwned) {
+      return { error: "Employee not found." };
+    }
+  }
+
   const { error } = await supabase.from("appointments").insert({
     business_profile_id: profile.id,
     customer_id: appointment.customer_id,
+    employee_id: appointment.employee_id,
     title: appointment.title,
     notes: appointment.notes,
     appointment_date: appointment.appointment_date,
@@ -188,7 +212,7 @@ export async function createAppointment(
     };
   }
 
-  revalidateSchedulePaths();
+  revalidateSchedulePaths(appointment.customer_id, appointment.employee_id);
   return { success: true };
 }
 
@@ -230,10 +254,23 @@ export async function updateAppointment(
     return { error: "Customer not found." };
   }
 
+  if (appointment.employee_id) {
+    const employeeOwned = await verifyEmployeeOwnership(
+      supabase,
+      appointment.employee_id,
+      profile.id,
+    );
+
+    if (!employeeOwned) {
+      return { error: "Employee not found." };
+    }
+  }
+
   const { error } = await supabase
     .from("appointments")
     .update({
       customer_id: appointment.customer_id,
+      employee_id: appointment.employee_id,
       title: appointment.title,
       notes: appointment.notes,
       appointment_date: appointment.appointment_date,
@@ -248,7 +285,7 @@ export async function updateAppointment(
     return { error: error.message };
   }
 
-  revalidateSchedulePaths();
+  revalidateSchedulePaths(appointment.customer_id, appointment.employee_id);
   return { success: true };
 }
 
@@ -268,7 +305,7 @@ export async function moveAppointmentDate(
 
   const { data: existing } = await supabase
     .from("appointments")
-    .select("id")
+    .select("id, customer_id, employee_id")
     .eq("id", appointmentId)
     .eq("business_profile_id", profile.id)
     .maybeSingle();
@@ -287,12 +324,13 @@ export async function moveAppointmentDate(
     return { error: error.message };
   }
 
-  revalidateSchedulePaths();
+  revalidateSchedulePaths(existing.customer_id, existing.employee_id);
   return { success: true };
 }
 
 export async function getCustomerAppointmentsAction(
   customerId: string,
+  options?: { includeAll?: boolean },
 ): Promise<{ appointments?: Appointment[]; error?: string }> {
   const { supabase, profile } = await getBusinessContext();
 
@@ -307,7 +345,9 @@ export async function getCustomerAppointmentsAction(
   }
 
   try {
-    const appointments = await getCustomerUpcomingAppointments(customerId);
+    const appointments = options?.includeAll
+      ? await getCustomerAllAppointments(customerId)
+      : await getCustomerUpcomingAppointments(customerId);
     return { appointments };
   } catch (error) {
     return {

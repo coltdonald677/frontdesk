@@ -12,6 +12,7 @@ import {
   type AppointmentWithCustomer,
 } from "@/lib/appointments/types";
 import { CustomerAvatar } from "./customer-avatar";
+import { AssignedEmployeeLabel } from "@/app/components/employees/assigned-employee-label";
 
 type AppointmentCardVariant = "default" | "compact" | "month";
 
@@ -94,6 +95,11 @@ export function AppointmentCard({
             {customerLabel}
           </p>
         )}
+        <AssignedEmployeeLabel
+          employee={appointment.employees}
+          size="xs"
+          className="mt-0.5"
+        />
       </button>
     );
   }
@@ -149,6 +155,11 @@ export function AppointmentCard({
             {customerCompany ? ` · ${customerCompany}` : ""}
           </p>
         )}
+        <AssignedEmployeeLabel
+          employee={appointment.employees}
+          size={isCompact ? "xs" : "sm"}
+          className={customerName ? "mt-1.5" : "mt-1"}
+        />
         {!isCompact && appointment.notes && (
           <p className="mt-2 line-clamp-2 text-sm text-zinc-400">
             {appointment.notes}

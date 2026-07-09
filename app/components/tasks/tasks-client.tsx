@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { EmptyState } from "@/app/components/ui/empty-state";
+import { AssignedEmployeeLabel } from "@/app/components/employees/assigned-employee-label";
 import {
   completeTaskFormAction,
   type TaskActionState,
@@ -119,7 +120,7 @@ export function TasksClient({ openTasks, completedTasks }: TasksClientProps) {
               </svg>
             }
             title="All caught up"
-            description="No open tasks. Create one from a customer's details page."
+            description="No open tasks. Create one from a customer's workspace page."
             action={
               <Link
                 href="/dashboard/customers"
@@ -180,6 +181,8 @@ export function TasksClient({ openTasks, completedTasks }: TasksClientProps) {
                           {task.customers.name}
                         </Link>
                       )}
+
+                      <AssignedEmployeeLabel employee={task.employees} size="xs" />
                     </div>
                   </div>
                 </li>
@@ -236,6 +239,8 @@ export function TasksClient({ openTasks, completedTasks }: TasksClientProps) {
                         {task.customers.name}
                       </Link>
                     )}
+
+                    <AssignedEmployeeLabel employee={task.employees} size="xs" />
                   </div>
                 </div>
               </li>

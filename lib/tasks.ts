@@ -20,7 +20,7 @@ export async function getOpenTasks(businessProfileId: string) {
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("*, customers(name)")
+    .select("*, customers(name), employees(full_name, color)")
     .eq("business_profile_id", businessProfileId)
     .eq("status", "open")
     .order("due_date", { ascending: true, nullsFirst: false });
@@ -54,7 +54,7 @@ export async function getCompletedTasks(businessProfileId: string) {
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("*, customers(name)")
+    .select("*, customers(name), employees(full_name, color)")
     .eq("business_profile_id", businessProfileId)
     .eq("status", "completed")
     .order("updated_at", { ascending: false });
@@ -107,7 +107,7 @@ export async function getTodayPriorities(businessProfileId: string) {
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("*, customers(name)")
+    .select("*, customers(name), employees(full_name, color)")
     .eq("business_profile_id", businessProfileId)
     .eq("status", "open")
     .not("due_date", "is", null)

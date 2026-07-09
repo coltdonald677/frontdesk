@@ -56,6 +56,14 @@ function parseCustomerForm(formData: FormData) {
   };
 }
 
+function revalidateCustomerPaths(customerId?: string) {
+  revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard");
+  if (customerId) {
+    revalidatePath(`/dashboard/customers/${customerId}`);
+  }
+}
+
 export async function createCustomer(
   _prevState: CustomerActionState,
   formData: FormData,
@@ -76,8 +84,7 @@ export async function createCustomer(
     return { error: error.message };
   }
 
-  revalidatePath("/dashboard/customers");
-  revalidatePath("/dashboard");
+  revalidateCustomerPaths();
   return { success: true };
 }
 
@@ -118,8 +125,7 @@ export async function updateCustomer(
     return { error: error.message };
   }
 
-  revalidatePath("/dashboard/customers");
-  revalidatePath("/dashboard");
+  revalidateCustomerPaths(id);
   return { success: true };
 }
 
@@ -130,8 +136,7 @@ export async function deleteCustomer(customerId: string): Promise<CustomerAction
     return { error: "Customer not found." };
   }
 
-  revalidatePath("/dashboard/customers");
-  revalidatePath("/dashboard");
+  revalidateCustomerPaths(customerId);
   return { success: true };
 }
 
@@ -212,7 +217,6 @@ export async function createCustomerActivity(
     return { error: error.message };
   }
 
-  revalidatePath("/dashboard/customers");
-  revalidatePath("/dashboard");
+  revalidateCustomerPaths(customerId);
   return { success: true };
 }

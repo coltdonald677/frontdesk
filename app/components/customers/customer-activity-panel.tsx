@@ -19,6 +19,7 @@ import {
   panelListClass,
   panelLoadingClass,
   panelRootClass,
+  workspaceListClass,
 } from "./panel-styles";
 
 const inputClassName =
@@ -117,12 +118,18 @@ function groupActivitiesByDate(activities: CustomerActivity[]) {
 
 type CustomerActivityPanelProps = {
   customerId: string;
+  variant?: "embedded" | "workspace";
 };
 
-export function CustomerActivityPanel({ customerId }: CustomerActivityPanelProps) {
+export function CustomerActivityPanel({
+  customerId,
+  variant = "embedded",
+}: CustomerActivityPanelProps) {
+  const isWorkspace = variant === "workspace";
   const [activities, setActivities] = useState<CustomerActivity[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
+  const [showForm, setShowForm] = useState(!isWorkspace);
   const [isLoading, startLoadTransition] = useTransition();
   const [state, formAction, pending] = useActionState<
     CustomerActivityActionState,
@@ -152,6 +159,9 @@ export function CustomerActivityPanel({ customerId }: CustomerActivityPanelProps
     if (state.success && !handledSuccess.current) {
       handledSuccess.current = true;
       setFormKey((current) => current + 1);
+      if (isWorkspace) {
+        setShowForm(false);
+      }
       loadActivities();
     }
 
@@ -163,14 +173,45 @@ export function CustomerActivityPanel({ customerId }: CustomerActivityPanelProps
   const groupedActivities = groupActivitiesByDate(activities);
 
   return (
-    <div className={panelRootClass}>
-      <div className={panelHeaderClass}>
-        <h3 className="text-sm font-semibold text-white">Activity history</h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          Log calls, emails, meetings, and notes for this customer.
-        </p>
+    <div className={isWorkspace ? "" : panelRootClass}>
+      <div
+        className={
+          isWorkspace
+            ? "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+            : panelHeaderClass
+        }
+      >
+        <div>
+          <h3 className="text-sm font-semibold text-white">Activity history</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Log calls, emails, meetings, and notes for this customer.
+          </p>
+        </div>
+        {isWorkspace && (
+          <button
+            type="button"
+            onClick={() => setShowForm((current) => !current)}
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4.5v15m7.5-7.5h-15"
+              />
+            </svg>
+            New activity
+          </button>
+        )}
       </div>
 
+      {showForm && (
       <form key={formKey} action={formAction} className={panelFormClass}>
         <input type="hidden" name="customer_id" value={customerId} />
 
@@ -214,7 +255,16 @@ export function CustomerActivityPanel({ customerId }: CustomerActivityPanelProps
           </div>
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          {isWorkspace && (
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              Cancel
+            </button>
+          )}
           <button
             type="submit"
             disabled={pending}
@@ -224,8 +274,9 @@ export function CustomerActivityPanel({ customerId }: CustomerActivityPanelProps
           </button>
         </div>
       </form>
+      )}
 
-      <div className={panelListClass}>
+      <div className={isWorkspace ? workspaceListClass : panelListClass}>
         {loadError && (
           <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
             {loadError}
@@ -256,6 +307,17 @@ export function CustomerActivityPanel({ customerId }: CustomerActivityPanelProps
             }
             title="No activity yet"
             description="Add a note or log your first interaction above."
+            action={
+              isWorkspace ? (
+                <button
+                  type="button"
+                  onClick={() => setShowForm(true)}
+                  className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+                >
+                  New activity
+                </button>
+              ) : undefined
+            }
           />
         )}
 

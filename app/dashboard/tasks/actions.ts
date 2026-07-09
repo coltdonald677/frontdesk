@@ -10,6 +10,7 @@ import {
   type TaskPriority,
 } from "@/lib/tasks/types";
 import { createClient } from "@/lib/supabase/server";
+import { verifyEmployeeOwnership } from "@/app/dashboard/employees/actions";
 
 export type TaskActionState = {
   error?: string;
@@ -45,6 +46,7 @@ function parseTaskForm(formData: FormData) {
   const dueDate = String(formData.get("due_date") ?? "").trim();
   const priority = String(formData.get("priority") ?? "").trim();
   const customerId = String(formData.get("customer_id") ?? "").trim();
+  const employeeId = String(formData.get("employee_id") ?? "").trim();
 
   return {
     title,
@@ -52,6 +54,7 @@ function parseTaskForm(formData: FormData) {
     due_date: dueDate || null,
     priority,
     customer_id: customerId || null,
+    employee_id: employeeId || null,
   };
 }
 
@@ -68,6 +71,22 @@ async function verifyCustomerOwnership(
     .maybeSingle();
 
   return Boolean(customer);
+}
+
+function revalidateTaskPaths(
+  customerId?: string | null,
+  employeeId?: string | null,
+) {
+  revalidatePath("/dashboard/tasks");
+  revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/employees");
+  revalidatePath("/dashboard");
+  if (customerId) {
+    revalidatePath(`/dashboard/customers/${customerId}`);
+  }
+  if (employeeId) {
+    revalidatePath(`/dashboard/employees/${employeeId}`);
+  }
 }
 
 export async function createTask(
@@ -97,9 +116,22 @@ export async function createTask(
     }
   }
 
+  if (task.employee_id) {
+    const employeeOwned = await verifyEmployeeOwnership(
+      supabase,
+      task.employee_id,
+      profile.id,
+    );
+
+    if (!employeeOwned) {
+      return { error: "Employee not found." };
+    }
+  }
+
   const { error } = await supabase.from("tasks").insert({
     business_profile_id: profile.id,
     customer_id: task.customer_id,
+    employee_id: task.employee_id,
     title: task.title,
     description: task.description,
     due_date: task.due_date,
@@ -110,9 +142,7 @@ export async function createTask(
     return { error: error.message };
   }
 
-  revalidatePath("/dashboard/tasks");
-  revalidatePath("/dashboard/customers");
-  revalidatePath("/dashboard");
+  revalidateTaskPaths(task.customer_id, task.employee_id);
   return { success: true };
 }
 
@@ -125,7 +155,7 @@ export async function completeTask(taskId: string): Promise<TaskActionState> {
 
   const { data: existing } = await supabase
     .from("tasks")
-    .select("id")
+    .select("id, customer_id, employee_id")
     .eq("id", taskId)
     .eq("business_profile_id", profile.id)
     .maybeSingle();
@@ -150,9 +180,7 @@ export async function completeTask(taskId: string): Promise<TaskActionState> {
     return { error: "Task could not be updated." };
   }
 
-  revalidatePath("/dashboard/tasks");
-  revalidatePath("/dashboard/customers");
-  revalidatePath("/dashboard");
+  revalidateTaskPaths(existing.customer_id, existing.employee_id);
   return { success: true };
 }
 

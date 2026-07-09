@@ -1,6 +1,7 @@
 "use client";
 
 import { LogoutButton } from "./logout-button";
+import { GlobalSearch } from "./global-search";
 
 type TopBarProps = {
   onMenuClick: () => void;
@@ -23,34 +24,7 @@ export function TopBar({ onMenuClick, displayName, initials }: TopBarProps) {
           </svg>
         </button>
 
-        <button
-          type="button"
-          className="rounded-lg p-2 text-zinc-400 transition-colors hover:bg-white/5 hover:text-white sm:hidden"
-          aria-label="Search"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-        </button>
-
-        <div className="hidden sm:block">
-          <div className="relative">
-            <svg
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-            </svg>
-            <input
-              type="search"
-              placeholder="Search customers, invoices..."
-              className="h-9 w-64 rounded-lg border border-white/[0.06] bg-zinc-900/50 pl-9 pr-4 text-sm text-white placeholder:text-zinc-500 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 lg:w-80"
-            />
-          </div>
-        </div>
+        <GlobalSearch />
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">

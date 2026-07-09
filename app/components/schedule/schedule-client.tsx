@@ -37,12 +37,14 @@ import {
   type AppointmentWithCustomer,
 } from "@/lib/appointments/types";
 import type { Customer } from "@/lib/customers/types";
+import type { Employee } from "@/lib/employees/types";
 
 type ScheduleView = "day" | "week" | "month";
 
 type ScheduleClientProps = {
   appointments: AppointmentWithCustomer[];
   customers: Customer[];
+  employees: Employee[];
   selectedDate: string;
   view: ScheduleView;
 };
@@ -198,6 +200,7 @@ function DayColumn({
 export function ScheduleClient({
   appointments,
   customers,
+  employees,
   selectedDate,
   view,
 }: ScheduleClientProps) {
@@ -690,6 +693,7 @@ export function ScheduleClient({
         <AppointmentDetailModal
           appointment={selectedAppointment}
           customers={customers}
+          employees={employees}
           onClose={() => setSelectedAppointment(null)}
         />
       )}
@@ -697,6 +701,7 @@ export function ScheduleClient({
       {showCreateModal && (
         <AppointmentDetailModal
           customers={customers}
+          employees={employees}
           defaultDate={createDefaultDate}
           onClose={() => setShowCreateModal(false)}
         />

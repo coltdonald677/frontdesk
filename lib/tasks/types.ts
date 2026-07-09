@@ -8,6 +8,7 @@ export type Task = {
   id: string;
   business_profile_id: string;
   customer_id: string | null;
+  employee_id: string | null;
   title: string;
   description: string | null;
   due_date: string | null;
@@ -19,6 +20,7 @@ export type Task = {
 
 export type TaskWithCustomer = Task & {
   customers: { name: string } | null;
+  employees?: { full_name: string; color: string } | null;
 };
 
 export const PRIORITY_LABELS: Record<TaskPriority, string> = {

@@ -19,6 +19,8 @@ import {
   formatTimeRange,
 } from "@/lib/appointments/datetime";
 import type { Customer } from "@/lib/customers/types";
+import type { Employee } from "@/lib/employees/types";
+import { EmployeeSelect } from "@/app/components/employees/employee-select";
 
 const inputClassName =
   "w-full rounded-lg border border-white/[0.06] bg-zinc-800/50 px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/50";
@@ -27,6 +29,7 @@ const labelClassName = "mb-1.5 block text-sm font-medium text-zinc-300";
 
 type AppointmentDetailModalProps = {
   customers: Customer[];
+  employees: Employee[];
   onClose: () => void;
   appointment?: AppointmentWithCustomer;
   defaultDate?: string;
@@ -55,6 +58,7 @@ function SubmitButton({ isEditing }: { isEditing: boolean }) {
 
 export function AppointmentDetailModal({
   customers,
+  employees,
   onClose,
   appointment,
   defaultDate,
@@ -154,6 +158,11 @@ export function AppointmentDetailModal({
               </select>
             )}
           </div>
+
+          <EmployeeSelect
+            employees={employees}
+            defaultValue={appointment?.employee_id}
+          />
 
           <div>
             <label htmlFor="appointment_title" className={labelClassName}>

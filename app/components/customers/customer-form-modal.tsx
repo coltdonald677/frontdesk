@@ -23,6 +23,7 @@ type CustomerFormModalProps = {
   customer: Customer | null;
   onClose: () => void;
   onSuccess: () => void;
+  profileOnly?: boolean;
 };
 
 export function CustomerFormModal({
@@ -30,6 +31,7 @@ export function CustomerFormModal({
   customer,
   onClose,
   onSuccess,
+  profileOnly = false,
 }: CustomerFormModalProps) {
   const isEditing = customer !== null;
   const action = isEditing ? updateCustomer : createCustomer;
@@ -72,16 +74,22 @@ export function CustomerFormModal({
 
       <div
         className={`relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-900 shadow-2xl shadow-indigo-500/10 ${
-          isEditing ? "max-w-3xl" : "max-w-lg"
+          isEditing && !profileOnly ? "max-w-3xl" : "max-w-lg"
         }`}
       >
         <div className="shrink-0 border-b border-white/[0.06] px-6 py-4">
           <h2 className="text-lg font-semibold text-white">
-            {isEditing ? "Customer details" : "Add customer"}
+            {isEditing
+              ? profileOnly
+                ? "Edit customer"
+                : "Customer details"
+              : "Add customer"}
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
             {isEditing
-              ? "Update profile, appointments, tasks, and activity."
+              ? profileOnly
+                ? "Update this customer's profile information."
+                : "Update profile, appointments, tasks, and activity."
               : "Create a new customer for your business."}
           </p>
         </div>
@@ -202,7 +210,7 @@ export function CustomerFormModal({
             )}
           </form>
 
-          {isEditing && customer && (
+          {isEditing && customer && !profileOnly && (
             <div>
               <CustomerAppointmentsPanel customer={customer} />
               <CustomerTasksPanel customerId={customer.id} />
