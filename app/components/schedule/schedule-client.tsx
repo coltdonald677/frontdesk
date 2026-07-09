@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { moveAppointmentDate } from "@/app/dashboard/schedule/actions";
 import { AppointmentCard } from "./appointment-card";
 import { AppointmentDetailModal } from "./appointment-detail-modal";
@@ -55,7 +56,7 @@ const FILTER_OPTIONS: { value: AppointmentStatusFilter; label: string }[] = [
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_VISIBLE_APPOINTMENTS = 2;
-const MONTH_CELL_HEIGHT = "6.75rem";
+const MONTH_CELL_HEIGHT = "7rem";
 
 function buildScheduleUrl(date: string, view: ScheduleView) {
   const params = new URLSearchParams({ date });
@@ -126,7 +127,7 @@ function DayColumn({
 
   return (
     <div
-      className={`flex min-h-48 flex-col rounded-xl border bg-zinc-900/40 ${
+      className={`flex min-h-52 min-w-[9.5rem] flex-col rounded-xl border bg-zinc-900/40 ${
         isToday
           ? "border-indigo-500/30 ring-1 ring-indigo-500/20"
           : "border-white/[0.06]"
@@ -139,7 +140,7 @@ function DayColumn({
       onDrop={onDrop ? (event) => onDrop(event, date) : undefined}
     >
       <div
-        className={`border-b px-3 py-3 ${
+        className={`shrink-0 border-b px-3 py-2.5 ${
           isToday
             ? "border-indigo-500/20 bg-indigo-500/5"
             : "border-white/[0.06]"
@@ -154,17 +155,17 @@ function DayColumn({
         </p>
         <p className="mt-0.5 text-[11px] text-zinc-500">
           {appointments.length === 0
-            ? "0 appointments"
+            ? "No appointments"
             : `${appointments.length} appointment${appointments.length === 1 ? "" : "s"}`}
         </p>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-2">
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2">
         {appointments.length === 0 ? (
           <button
             type="button"
             onClick={() => onCreate(date)}
-            className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-white/[0.08] px-2 py-6 text-xs text-zinc-500 transition-colors hover:border-indigo-500/20 hover:bg-white/[0.02] hover:text-zinc-300"
+            className="mx-auto flex min-h-[2.5rem] w-full max-w-[10rem] items-center justify-center rounded-lg border border-dashed border-white/[0.08] px-3 text-xs text-zinc-500 transition-colors hover:border-indigo-500/20 hover:bg-white/[0.02] hover:text-zinc-300"
           >
             Add appointment
           </button>
@@ -424,11 +425,11 @@ export function ScheduleClient({
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-zinc-500">
             Filter
           </span>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {FILTER_OPTIONS.map((option) => (
               <button
                 key={option.value}
@@ -466,8 +467,8 @@ export function ScheduleClient({
           </div>
 
           {filteredAppointments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500/10">
+            <EmptyState
+              icon={
                 <svg
                   className="h-6 w-6 text-indigo-400"
                   fill="none"
@@ -481,35 +482,41 @@ export function ScheduleClient({
                     d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"
                   />
                 </svg>
-              </div>
-              <p className="mt-3 text-sm font-medium text-white">
-                Nothing on the calendar
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Schedule an appointment to fill this day.
-              </p>
-              <button
-                type="button"
-                onClick={() => openCreateModal()}
-                className="mt-4 rounded-lg border border-white/[0.06] bg-zinc-800/50 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white"
-              >
-                Schedule appointment
-              </button>
-            </div>
+              }
+              title={
+                statusFilter === "all"
+                  ? "Nothing on the calendar"
+                  : `No ${statusFilter} appointments`
+              }
+              description={
+                statusFilter === "all"
+                  ? "Schedule an appointment to fill this day."
+                  : "Try a different filter or add a new appointment."
+              }
+              action={
+                <button
+                  type="button"
+                  onClick={() => openCreateModal()}
+                  className="rounded-lg border border-white/[0.06] bg-zinc-800/50 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white"
+                >
+                  Schedule appointment
+                </button>
+              }
+            />
           ) : (
-            <div className="divide-y divide-white/[0.06] px-5 py-2">
+            <div className="divide-y divide-white/[0.06] px-5 py-1">
               {filteredAppointments.map((appointment) => (
                 <div
                   key={appointment.id}
                   className="flex w-full items-start gap-4 rounded-lg px-2 py-4"
                 >
-                  <div className="w-24 shrink-0 pt-0.5">
+                  <div className="w-20 shrink-0 pt-1 sm:w-24">
                     <p
                       className={`text-xs font-medium ${STATUS_TIME_STYLES[appointment.status]}`}
                     >
                       {formatTimeDisplay(appointment.start_time)}
                     </p>
-                    <p className="mt-0.5 text-xs text-zinc-600">
+                    <p className="mt-0.5 text-[11px] text-zinc-600">
                       {formatTimeDisplay(appointment.end_time)}
                     </p>
                   </div>
@@ -532,8 +539,9 @@ export function ScheduleClient({
             <p className="mt-0.5 text-xs text-zinc-500">{periodSummary}</p>
           </div>
 
-          <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-            {weekDates.map((date) => (
+          <div className="overflow-x-auto p-4">
+            <div className="grid min-w-[52rem] gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+              {weekDates.map((date) => (
               <DayColumn
                 key={date}
                 date={date}
@@ -549,7 +557,8 @@ export function ScheduleClient({
                 onDragOver={handleDragOver}
                 dropTargetDate={dropTargetDate}
               />
-            ))}
+              ))}
+            </div>
           </div>
         </section>
       ) : (
@@ -572,11 +581,12 @@ export function ScheduleClient({
             </div>
           </div>
 
-          <div
-            className="grid grid-cols-7 gap-1.5 p-3"
-            style={{ gridAutoRows: MONTH_CELL_HEIGHT }}
-          >
-            {monthDates.map((date) => {
+          <div className="overflow-x-auto px-3 pb-3 pt-1">
+            <div
+              className="grid min-w-[36rem] grid-cols-7 gap-1.5"
+              style={{ gridAutoRows: MONTH_CELL_HEIGHT }}
+            >
+              {monthDates.map((date) => {
               const dayAppointments = appointmentsByDate.get(date) ?? [];
               const visibleAppointments = dayAppointments.slice(
                 0,
@@ -633,13 +643,13 @@ export function ScheduleClient({
                       <button
                         type="button"
                         onClick={() => openCreateModal(date)}
-                        className="flex h-5 w-5 items-center justify-center self-center rounded border border-dashed border-white/[0.08] text-[10px] text-zinc-600 transition-colors hover:border-indigo-500/20 hover:text-zinc-400"
+                        className="flex h-6 w-6 items-center justify-center self-center rounded-md border border-dashed border-white/[0.08] text-xs text-zinc-600 transition-colors hover:border-indigo-500/20 hover:bg-white/[0.02] hover:text-zinc-400"
                         aria-label={`Add appointment on ${formatShortDayHeader(date)}`}
                       >
                         +
                       </button>
                     ) : (
-                      <div className="flex flex-col gap-0.5">
+                      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
                         {visibleAppointments.map((appointment) => (
                           <AppointmentCard
                             key={appointment.id}
@@ -671,6 +681,7 @@ export function ScheduleClient({
                 </div>
               );
             })}
+            </div>
           </div>
         </section>
       )}

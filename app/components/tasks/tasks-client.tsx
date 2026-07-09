@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import {
   completeTaskFormAction,
   type TaskActionState,
@@ -101,8 +102,8 @@ export function TasksClient({ openTasks, completedTasks }: TasksClientProps) {
         </div>
 
         {openTasks.length === 0 ? (
-          <div className="px-5 py-16 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800">
+          <EmptyState
+            icon={
               <svg
                 className="h-6 w-6 text-zinc-500"
                 fill="none"
@@ -116,18 +117,18 @@ export function TasksClient({ openTasks, completedTasks }: TasksClientProps) {
                   d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-            </div>
-            <p className="text-sm font-medium text-white">All caught up</p>
-            <p className="mt-1 text-sm text-zinc-500">
-              No open tasks. Create one from a customer&apos;s details page.
-            </p>
-            <Link
-              href="/dashboard/customers"
-              className="mt-4 inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
-            >
-              Go to customers
-            </Link>
-          </div>
+            }
+            title="All caught up"
+            description="No open tasks. Create one from a customer's details page."
+            action={
+              <Link
+                href="/dashboard/customers"
+                className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+              >
+                Go to customers
+              </Link>
+            }
+          />
         ) : (
           <ul className="divide-y divide-white/[0.06]">
             {openTasks.map((task) => {

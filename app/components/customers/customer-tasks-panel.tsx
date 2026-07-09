@@ -1,13 +1,14 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { DueDateBadge } from "@/app/components/tasks/due-date-badge";
 import {
   completeTask,
   createTask,
   getCustomerTasksAction,
   type TaskActionState,
 } from "@/app/dashboard/tasks/actions";
-import { DueDateBadge } from "@/app/components/tasks/due-date-badge";
 import { getDueDateInfo } from "@/lib/tasks/due-date";
 import {
   PRIORITY_LABELS,
@@ -15,6 +16,15 @@ import {
   type Task,
   type TaskPriority,
 } from "@/lib/tasks/types";
+import {
+  panelFormClass,
+  panelHeaderClass,
+  panelItemCardClass,
+  panelListClass,
+  panelLoadingClass,
+  panelRootClass,
+  panelSectionLabelClass,
+} from "./panel-styles";
 
 const inputClassName =
   "w-full rounded-lg border border-white/[0.06] bg-zinc-800/50 px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/50";
@@ -90,19 +100,15 @@ export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
   const completedTasks = tasks.filter((task) => task.status === "completed");
 
   return (
-    <div className="border-t border-white/[0.06]">
-      <div className="border-b border-white/[0.06] px-6 py-4">
+    <div className={panelRootClass}>
+      <div className={panelHeaderClass}>
         <h3 className="text-sm font-semibold text-white">Tasks & reminders</h3>
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-xs text-zinc-500">
           Track follow-ups and to-dos for this customer.
         </p>
       </div>
 
-      <form
-        key={formKey}
-        action={formAction}
-        className="space-y-4 border-b border-white/[0.06] px-6 py-5"
-      >
+      <form key={formKey} action={formAction} className={panelFormClass}>
         <input type="hidden" name="customer_id" value={customerId} />
 
         {state.error && (
@@ -138,7 +144,7 @@ export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="task_due_date" className={labelClassName}>
               Due date
@@ -181,7 +187,7 @@ export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
         </div>
       </form>
 
-      <div className="max-h-72 overflow-y-auto px-6 py-4">
+      <div className={panelListClass}>
         {loadError && (
           <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
             {loadError}
@@ -189,95 +195,121 @@ export function CustomerTasksPanel({ customerId }: CustomerTasksPanelProps) {
         )}
 
         {!loadError && isLoading && tasks.length === 0 && (
-          <p className="py-6 text-center text-sm text-zinc-500">Loading tasks...</p>
+          <p className={panelLoadingClass}>Loading tasks...</p>
         )}
 
         {!loadError && !isLoading && tasks.length === 0 && (
-          <div className="py-8 text-center">
-            <p className="text-sm font-medium text-white">No tasks yet</p>
-            <p className="mt-1 text-sm text-zinc-500">
-              Add a reminder or follow-up above.
-            </p>
-          </div>
+          <EmptyState
+            compact
+            icon={
+              <svg
+                className="h-5 w-5 text-zinc-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            }
+            title="No tasks yet"
+            description="Add a reminder or follow-up above."
+          />
         )}
 
         {!loadError && openTasks.length > 0 && (
-          <ul className="space-y-3">
-            {openTasks.map((task) => {
-              const due = getDueDateInfo(task.due_date);
+          <div>
+            <p className={panelSectionLabelClass}>
+              Open ({openTasks.length})
+            </p>
+            <ul className="space-y-2">
+              {openTasks.map((task) => {
+                const due = getDueDateInfo(task.due_date);
 
-              return (
-                <li
-                  key={task.id}
-                  className="rounded-lg border border-white/[0.06] bg-zinc-800/30 px-4 py-3"
-                >
-                  <div className="flex items-start gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleComplete(task.id)}
-                      disabled={isCompleting}
-                      className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-white/20 transition-colors hover:border-indigo-400 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      aria-label={`Mark "${task.title}" complete`}
-                    >
-                      <svg
-                        className="h-3 w-3 text-transparent"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2.5}
-                        stroke="currentColor"
+                return (
+                  <li key={task.id} className={panelItemCardClass}>
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleComplete(task.id)}
+                        disabled={isCompleting}
+                        className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-white/20 transition-colors hover:border-indigo-400 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`Mark "${task.title}" complete`}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M4.5 12.75l6 6 9-13.5"
-                        />
-                      </svg>
-                    </button>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-white">{task.title}</p>
-                        <span
-                          className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${PRIORITY_STYLES[task.priority]}`}
+                        <svg
+                          className="h-3 w-3 text-transparent"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={2.5}
+                          stroke="currentColor"
                         >
-                          {PRIORITY_LABELS[task.priority]}
-                        </span>
-                        <DueDateBadge dueDate={task.due_date} />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M4.5 12.75l6 6 9-13.5"
+                          />
+                        </svg>
+                      </button>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="min-w-0 text-sm font-medium text-white">
+                            {task.title}
+                          </p>
+                          <span
+                            className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${PRIORITY_STYLES[task.priority]}`}
+                          >
+                            {PRIORITY_LABELS[task.priority]}
+                          </span>
+                          <DueDateBadge dueDate={task.due_date} />
+                        </div>
+
+                        {task.description && (
+                          <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-zinc-400">
+                            {task.description}
+                          </p>
+                        )}
+
+                        {task.due_date && (
+                          <p
+                            className={`mt-1.5 text-xs ${due.status === "overdue" ? "font-medium text-red-400" : "text-zinc-500"}`}
+                          >
+                            Due {due.label}
+                          </p>
+                        )}
                       </div>
-
-                      {task.description && (
-                        <p className="mt-1 text-sm text-zinc-400">{task.description}</p>
-                      )}
-
-                      {task.due_date && (
-                        <p
-                          className={`mt-2 text-xs ${due.status === "overdue" ? "font-medium text-red-400" : "text-zinc-500"}`}
-                        >
-                          Due {due.label}
-                        </p>
-                      )}
                     </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
 
         {!loadError && completedTasks.length > 0 && (
-          <div className={openTasks.length > 0 ? "mt-6" : ""}>
-            {openTasks.length > 0 && (
-              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                Completed
-              </p>
-            )}
-            <ul className="space-y-2">
+          <div
+            className={
+              openTasks.length > 0
+                ? "mt-5 border-t border-white/[0.06] pt-5"
+                : ""
+            }
+          >
+            <p className={panelSectionLabelClass}>
+              Completed ({completedTasks.length})
+            </p>
+            <ul className="space-y-1.5">
               {completedTasks.map((task) => (
                 <li
                   key={task.id}
-                  className="rounded-lg border border-white/[0.04] bg-zinc-800/20 px-4 py-2.5 opacity-60"
+                  className="rounded-lg border border-white/[0.04] bg-zinc-800/15 px-4 py-2.5"
                 >
-                  <p className="text-sm text-zinc-400 line-through">{task.title}</p>
+                  <p className="truncate text-sm text-zinc-500 line-through">
+                    {task.title}
+                  </p>
                 </li>
               ))}
             </ul>

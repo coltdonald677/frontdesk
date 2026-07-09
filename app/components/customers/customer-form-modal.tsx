@@ -16,6 +16,8 @@ const inputClassName =
 
 const labelClassName = "mb-1.5 block text-sm font-medium text-zinc-300";
 
+const FORM_ID = "customer-profile-form";
+
 type CustomerFormModalProps = {
   open: boolean;
   customer: Customer | null;
@@ -70,131 +72,164 @@ export function CustomerFormModal({
 
       <div
         className={`relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-900 shadow-2xl shadow-indigo-500/10 ${
-          isEditing ? "max-w-2xl" : "max-w-lg"
+          isEditing ? "max-w-3xl" : "max-w-lg"
         }`}
       >
-        <div className="border-b border-white/[0.06] px-6 py-4">
+        <div className="shrink-0 border-b border-white/[0.06] px-6 py-4">
           <h2 className="text-lg font-semibold text-white">
             {isEditing ? "Customer details" : "Add customer"}
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
             {isEditing
-              ? "Update customer details, tasks, and activity history."
+              ? "Update profile, appointments, tasks, and activity."
               : "Create a new customer for your business."}
           </p>
         </div>
 
-        <form action={formAction} className="space-y-4 overflow-y-auto px-6 py-5">
-          {isEditing && <input type="hidden" name="id" value={customer.id} />}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <form
+            id={FORM_ID}
+            action={formAction}
+            className={`space-y-4 px-6 py-5 ${isEditing ? "border-b border-white/[0.06] bg-zinc-900/30" : ""}`}
+          >
+            {isEditing && <input type="hidden" name="id" value={customer.id} />}
 
-          {state.error && (
-            <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-              {state.error}
+            {state.error && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {state.error}
+              </div>
+            )}
+
+            {isEditing && (
+              <div className="flex items-center gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                  Profile
+                </p>
+                <div className="h-px flex-1 bg-white/[0.06]" aria-hidden />
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="name" className={labelClassName}>
+                Name
+              </label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                required
+                defaultValue={customer?.name ?? ""}
+                placeholder="Maria Chen"
+                className={inputClassName}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="company" className={labelClassName}>
+                Company
+              </label>
+              <input
+                id="company"
+                name="company"
+                type="text"
+                defaultValue={customer?.company ?? ""}
+                placeholder="Bloom Studio"
+                className={inputClassName}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="email" className={labelClassName}>
+                  Email
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  defaultValue={customer?.email ?? ""}
+                  placeholder="maria@bloomstudio.com"
+                  className={inputClassName}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="phone" className={labelClassName}>
+                  Phone
+                </label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  defaultValue={customer?.phone ?? ""}
+                  placeholder="(555) 123-4567"
+                  className={inputClassName}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="notes" className={labelClassName}>
+                Notes
+              </label>
+              <textarea
+                id="notes"
+                name="notes"
+                rows={3}
+                defaultValue={customer?.notes ?? ""}
+                placeholder="Preferences, project history, follow-up reminders..."
+                className={`${inputClassName} resize-none`}
+              />
+            </div>
+
+            {!isEditing && (
+              <div className="flex justify-end gap-3 border-t border-white/[0.06] pt-4">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg px-4 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {pending ? "Creating..." : "Create customer"}
+                </button>
+              </div>
+            )}
+          </form>
+
+          {isEditing && customer && (
+            <div>
+              <CustomerAppointmentsPanel customer={customer} />
+              <CustomerTasksPanel customerId={customer.id} />
+              <CustomerActivityPanel customerId={customer.id} />
             </div>
           )}
+        </div>
 
-          <div>
-            <label htmlFor="name" className={labelClassName}>
-              Name
-            </label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              required
-              defaultValue={customer?.name ?? ""}
-              placeholder="Maria Chen"
-              className={inputClassName}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="company" className={labelClassName}>
-              Company
-            </label>
-            <input
-              id="company"
-              name="company"
-              type="text"
-              defaultValue={customer?.company ?? ""}
-              placeholder="Bloom Studio"
-              className={inputClassName}
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="email" className={labelClassName}>
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                defaultValue={customer?.email ?? ""}
-                placeholder="maria@bloomstudio.com"
-                className={inputClassName}
-              />
+        {isEditing && (
+          <div className="shrink-0 border-t border-white/[0.06] bg-zinc-900/95 px-6 py-4 backdrop-blur-sm">
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg px-4 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form={FORM_ID}
+                disabled={pending}
+                className="rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {pending ? "Saving..." : "Save changes"}
+              </button>
             </div>
-
-            <div>
-              <label htmlFor="phone" className={labelClassName}>
-                Phone
-              </label>
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                defaultValue={customer?.phone ?? ""}
-                placeholder="(555) 123-4567"
-                className={inputClassName}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="notes" className={labelClassName}>
-              Notes
-            </label>
-            <textarea
-              id="notes"
-              name="notes"
-              rows={3}
-              defaultValue={customer?.notes ?? ""}
-              placeholder="Preferences, project history, follow-up reminders..."
-              className={`${inputClassName} resize-none`}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {pending
-                ? isEditing
-                  ? "Saving..."
-                  : "Creating..."
-                : isEditing
-                  ? "Save changes"
-                  : "Create customer"}
-            </button>
-          </div>
-        </form>
-
-        {isEditing && customer && (
-          <div className="overflow-y-auto">
-            <CustomerAppointmentsPanel customer={customer} />
-            <CustomerTasksPanel customerId={customer.id} />
-            <CustomerActivityPanel customerId={customer.id} />
           </div>
         )}
       </div>
