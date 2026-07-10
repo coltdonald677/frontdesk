@@ -1,6 +1,9 @@
 import { DashboardShell } from "@/app/components/dashboard/dashboard-shell";
 import { TasksClient } from "@/app/components/tasks/tasks-client";
 import { getBusinessProfile } from "@/lib/business-profile";
+import { getCustomers } from "@/lib/customers";
+import { parseTaskFilter } from "@/lib/dashboard/links";
+import { getEmployees } from "@/lib/employees";
 import { getCompletedTasks, getOpenTasks } from "@/lib/tasks";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,16 +20,26 @@ function getUserDisplay(user: {
   return { displayName, initials };
 }
 
-export default async function TasksPage() {
+type TasksPageProps = {
+  searchParams: Promise<{ filter?: string; new?: string }>;
+};
+
+export default async function TasksPage({ searchParams }: TasksPageProps) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const profile = await getBusinessProfile();
-  const [openTasks, completedTasks] = await Promise.all([
+  const params = await searchParams;
+  const initialFilter = parseTaskFilter(params.filter);
+  const openNewTask = params.new === "task";
+
+  const [openTasks, completedTasks, customers, employees] = await Promise.all([
     getOpenTasks(profile!.id),
     getCompletedTasks(profile!.id),
+    openNewTask ? getCustomers(profile!.id) : Promise.resolve([]),
+    openNewTask ? getEmployees(profile!.id) : Promise.resolve([]),
   ]);
   const { displayName, initials } = getUserDisplay(user!);
 
@@ -42,7 +55,14 @@ export default async function TasksPage() {
           </p>
         </div>
 
-        <TasksClient openTasks={openTasks} completedTasks={completedTasks} />
+        <TasksClient
+          openTasks={openTasks}
+          completedTasks={completedTasks}
+          initialFilter={initialFilter}
+          openNewTask={openNewTask}
+          customers={customers}
+          employees={employees}
+        />
       </div>
     </DashboardShell>
   );

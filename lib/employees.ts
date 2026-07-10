@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getTodayIsoDate, getWeekEnd } from "@/lib/appointments/datetime";
 import type { Employee } from "@/lib/employees/types";
+import { calculateWorkloadPercentage } from "@/lib/employees/workload";
 
 export type { Employee, EmployeeStatus } from "@/lib/employees/types";
 export {
@@ -15,6 +16,12 @@ export {
   getEmployeeInitials,
   isEmployeeColorId,
 } from "@/lib/employees/colors";
+export {
+  calculateWorkloadPercentage,
+  getWorkloadBarColor,
+  getWorkloadLevel,
+  getWorkloadTextColor,
+} from "@/lib/employees/workload";
 
 export type EmployeeWorkspaceStats = {
   appointmentsToday: number;
@@ -22,6 +29,15 @@ export type EmployeeWorkspaceStats = {
   openTasks: number;
   completedTasks: number;
   upcomingAppointments: number;
+  workloadPercentage: number;
+};
+
+export type EmployeeListStats = {
+  appointmentsToday: number;
+  upcomingAppointments: number;
+  openTasks: number;
+  completedTasks: number;
+  workloadPercentage: number;
 };
 
 export type EmployeeDashboardStats = {
@@ -140,13 +156,124 @@ export async function getEmployeeWorkspaceStats(
       .gte("appointment_date", today),
   ]);
 
-  return {
+  const stats = {
     appointmentsToday: appointmentsToday ?? 0,
     appointmentsThisWeek: appointmentsThisWeek ?? 0,
     openTasks: openTasks ?? 0,
     completedTasks: completedTasks ?? 0,
     upcomingAppointments: upcomingAppointments ?? 0,
   };
+
+  return {
+    ...stats,
+    workloadPercentage: calculateWorkloadPercentage(stats),
+  };
+}
+
+export async function getEmployeeTodayAppointments(employeeId: string) {
+  const supabase = await createClient();
+  const today = getTodayIsoDate();
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("*, customers(name, company)")
+    .eq("employee_id", employeeId)
+    .eq("appointment_date", today)
+    .eq("status", "scheduled")
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ?? [];
+}
+
+export async function getEmployeesListStats(
+  businessProfileId: string,
+  employeeIds: string[],
+): Promise<Map<string, EmployeeListStats>> {
+  const statsMap = new Map<string, EmployeeListStats>();
+
+  if (employeeIds.length === 0) {
+    return statsMap;
+  }
+
+  const supabase = await createClient();
+  const today = getTodayIsoDate();
+  const weekEnd = getWeekEnd(today);
+
+  const [{ data: appointments }, { data: tasks }] = await Promise.all([
+    supabase
+      .from("appointments")
+      .select("employee_id, appointment_date, status")
+      .eq("business_profile_id", businessProfileId)
+      .in("employee_id", employeeIds)
+      .eq("status", "scheduled")
+      .gte("appointment_date", today),
+    supabase
+      .from("tasks")
+      .select("employee_id, status")
+      .eq("business_profile_id", businessProfileId)
+      .in("employee_id", employeeIds),
+  ]);
+
+  for (const employeeId of employeeIds) {
+    statsMap.set(employeeId, {
+      appointmentsToday: 0,
+      upcomingAppointments: 0,
+      openTasks: 0,
+      completedTasks: 0,
+      workloadPercentage: 0,
+    });
+  }
+
+  for (const appointment of appointments ?? []) {
+    if (!appointment.employee_id) continue;
+
+    const entry = statsMap.get(appointment.employee_id);
+    if (!entry) continue;
+
+    entry.upcomingAppointments += 1;
+    if (appointment.appointment_date === today) {
+      entry.appointmentsToday += 1;
+    }
+  }
+
+  const appointmentsThisWeekByEmployee = new Map<string, number>();
+  for (const appointment of appointments ?? []) {
+    if (!appointment.employee_id) continue;
+    if (appointment.appointment_date > weekEnd) continue;
+
+    appointmentsThisWeekByEmployee.set(
+      appointment.employee_id,
+      (appointmentsThisWeekByEmployee.get(appointment.employee_id) ?? 0) + 1,
+    );
+  }
+
+  for (const task of tasks ?? []) {
+    if (!task.employee_id) continue;
+
+    const entry = statsMap.get(task.employee_id);
+    if (!entry) continue;
+
+    if (task.status === "open") {
+      entry.openTasks += 1;
+    } else if (task.status === "completed") {
+      entry.completedTasks += 1;
+    }
+  }
+
+  for (const [employeeId, entry] of statsMap) {
+    entry.workloadPercentage = calculateWorkloadPercentage({
+      appointmentsToday: entry.appointmentsToday,
+      appointmentsThisWeek:
+        appointmentsThisWeekByEmployee.get(employeeId) ?? entry.appointmentsToday,
+      openTasks: entry.openTasks,
+    });
+  }
+
+  return statsMap;
 }
 
 export async function getEmployeeAppointments(employeeId: string) {

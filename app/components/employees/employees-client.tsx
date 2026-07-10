@@ -1,23 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import {
   archiveEmployee,
   deleteEmployee,
 } from "@/app/dashboard/employees/actions";
+import type { EmployeeFocus } from "@/lib/dashboard/links";
+import type { EmployeeListStats } from "@/lib/employees";
 import type { Employee } from "@/lib/employees/types";
 import { EmployeeAvatar } from "./employee-avatar";
 import { EmployeeFormModal } from "./employee-form-modal";
 import { EmployeeStatusBadge } from "./employee-status-badge";
+import { EmployeeWorkloadBar } from "./employee-workload-bar";
 
 type EmployeesClientProps = {
   employees: Employee[];
+  statsByEmployeeId: Record<string, EmployeeListStats>;
+  initialFocus?: EmployeeFocus;
+  openNewEmployee?: boolean;
 };
 
-export function EmployeesClient({ employees }: EmployeesClientProps) {
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-white/[0.04] bg-zinc-800/30 px-3 py-2">
+      <p className="text-lg font-semibold tabular-nums text-white">{value}</p>
+      <p className="text-[10px] text-zinc-500">{label}</p>
+    </div>
+  );
+}
+
+export function EmployeesClient({
+  employees,
+  statsByEmployeeId,
+  initialFocus,
+  openNewEmployee = false,
+}: EmployeesClientProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -26,10 +46,17 @@ export function EmployeesClient({ employees }: EmployeesClientProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    if (openNewEmployee) {
+      setEditingEmployee(null);
+      setModalOpen(true);
+    }
+  }, [openNewEmployee]);
+
   const filteredEmployees = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return employees.filter((employee) => {
+    const matches = employees.filter((employee) => {
       if (!showArchived && employee.status === "inactive") {
         return false;
       }
@@ -49,7 +76,24 @@ export function EmployeesClient({ employees }: EmployeesClientProps) {
 
       return haystack.includes(query);
     });
-  }, [employees, search, showArchived]);
+
+    if (initialFocus === "workload") {
+      return [...matches].sort((left, right) => {
+        const leftWorkload =
+          statsByEmployeeId[left.id]?.workloadPercentage ?? 0;
+        const rightWorkload =
+          statsByEmployeeId[right.id]?.workloadPercentage ?? 0;
+        return rightWorkload - leftWorkload;
+      });
+    }
+
+    return matches;
+  }, [employees, search, showArchived, initialFocus, statsByEmployeeId]);
+
+  const activeCount = useMemo(
+    () => employees.filter((employee) => employee.status === "active").length,
+    [employees],
+  );
 
   const openCreateModal = () => {
     setEditingEmployee(null);
@@ -95,6 +139,14 @@ export function EmployeesClient({ employees }: EmployeesClientProps) {
       }
       router.refresh();
     });
+  };
+
+  const emptyStats: EmployeeListStats = {
+    appointmentsToday: 0,
+    upcomingAppointments: 0,
+    openTasks: 0,
+    completedTasks: 0,
+    workloadPercentage: 0,
   };
 
   return (
@@ -143,151 +195,168 @@ export function EmployeesClient({ employees }: EmployeesClientProps) {
         </button>
       </div>
 
+      {initialFocus === "workload" && (
+        <div className="mb-4 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-4 py-3 text-sm text-indigo-200">
+          Sorted by team workload — highest capacity first
+        </div>
+      )}
+
       {actionError && (
         <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
           {actionError}
         </div>
       )}
 
-      <section className="overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-900/50 backdrop-blur-sm">
-        {filteredEmployees.length > 0 && (
-          <div className="border-b border-white/[0.06] px-5 py-3">
-            <p className="text-xs text-zinc-500">
-              {filteredEmployees.length} employee
-              {filteredEmployees.length === 1 ? "" : "s"}
-            </p>
-          </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/[0.06]">
-            <thead>
-              <tr className="bg-zinc-900/80">
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Employee
-                </th>
-                <th className="hidden px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 md:table-cell">
-                  Position
-                </th>
-                <th className="hidden px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 lg:table-cell">
-                  Contact
-                </th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Status
-                </th>
-                <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.06]">
-              {filteredEmployees.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-5">
-                    <EmptyState
-                      icon={
-                        <svg
-                          className="h-6 w-6 text-zinc-500"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M18 18.72a9.09 9.09 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
-                          />
-                        </svg>
-                      }
-                      title="No employees yet"
-                      description="Add your first team member to start assigning work."
-                      action={
-                        <button
-                          type="button"
-                          onClick={openCreateModal}
-                          className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
-                        >
-                          Add employee
-                        </button>
-                      }
-                    />
-                  </td>
-                </tr>
-              ) : (
-                filteredEmployees.map((employee) => (
-                  <tr
-                    key={employee.id}
-                    className="cursor-pointer transition-colors hover:bg-white/[0.03]"
-                    onClick={() => router.push(`/dashboard/employees/${employee.id}`)}
-                  >
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <EmployeeAvatar employee={employee} size="sm" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-white">
-                            {employee.full_name}
-                          </p>
-                          <p className="truncate text-xs text-zinc-500">
-                            {employee.position || employee.email || "—"}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="hidden px-5 py-4 text-sm text-zinc-300 md:table-cell">
-                      {employee.position || "—"}
-                    </td>
-                    <td className="hidden px-5 py-4 text-sm text-zinc-300 lg:table-cell">
-                      {employee.email || employee.phone || "—"}
-                    </td>
-                    <td className="px-5 py-4">
-                      <EmployeeStatusBadge status={employee.status} />
-                    </td>
-                    <td
-                      className="px-5 py-4"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/dashboard/employees/${employee.id}`}
-                          className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
-                        >
-                          View
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(employee)}
-                          className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
-                        >
-                          Edit
-                        </button>
-                        {employee.status === "active" && (
-                          <button
-                            type="button"
-                            onClick={() => handleArchive(employee)}
-                            disabled={isPending}
-                            className="rounded-lg px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/10 disabled:opacity-50"
-                          >
-                            Archive
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(employee)}
-                          disabled={isPending}
-                          className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {filteredEmployees.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+          <span>
+            {filteredEmployees.length} employee
+            {filteredEmployees.length === 1 ? "" : "s"}
+            {search.trim() ? " matching search" : ""}
+          </span>
+          <span className="hidden sm:inline">·</span>
+          <span className="hidden sm:inline">
+            {activeCount} active team member{activeCount === 1 ? "" : "s"}
+          </span>
         </div>
-      </section>
+      )}
+
+      {filteredEmployees.length === 0 ? (
+        <section className="overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-900/50 backdrop-blur-sm">
+          <EmptyState
+            icon={
+              <svg
+                className="h-6 w-6 text-zinc-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M18 18.72a9.09 9.09 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
+                />
+              </svg>
+            }
+            title={
+              employees.length === 0
+                ? "No employees yet"
+                : "No employees match your filters"
+            }
+            description={
+              employees.length === 0
+                ? "Add your first team member to start assigning work."
+                : "Try a different search term or show archived employees."
+            }
+            action={
+              employees.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200"
+                >
+                  Add employee
+                </button>
+              ) : undefined
+            }
+          />
+        </section>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {filteredEmployees.map((employee) => {
+            const stats = statsByEmployeeId[employee.id] ?? emptyStats;
+
+            return (
+              <article
+                key={employee.id}
+                className="group flex flex-col overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-900/50 backdrop-blur-sm transition-colors hover:border-white/[0.12] hover:bg-zinc-900/70"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(`/dashboard/employees/${employee.id}`)
+                  }
+                  className="flex flex-1 flex-col p-5 text-left"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="rounded-full ring-2 ring-white/[0.06] ring-offset-2 ring-offset-zinc-900/50 transition-colors group-hover:ring-indigo-500/30">
+                      <EmployeeAvatar employee={employee} size="lg" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="truncate text-base font-semibold text-white">
+                          {employee.full_name}
+                        </h2>
+                        <EmployeeStatusBadge status={employee.status} />
+                      </div>
+                      <p className="mt-0.5 truncate text-sm text-zinc-400">
+                        {employee.position || "Team member"}
+                      </p>
+                      {(employee.email || employee.phone) && (
+                        <p className="mt-1 truncate text-xs text-zinc-500">
+                          {employee.email || employee.phone}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-4 gap-2">
+                    <MiniStat label="Today" value={stats.appointmentsToday} />
+                    <MiniStat label="Upcoming" value={stats.upcomingAppointments} />
+                    <MiniStat label="Open tasks" value={stats.openTasks} />
+                    <MiniStat label="Done" value={stats.completedTasks} />
+                  </div>
+
+                  <div className="mt-4">
+                    <EmployeeWorkloadBar
+                      percentage={stats.workloadPercentage}
+                      size="sm"
+                    />
+                  </div>
+                </button>
+
+                <div
+                  className="flex items-center justify-end gap-1 border-t border-white/[0.06] px-3 py-2"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <Link
+                    href={`/dashboard/employees/${employee.id}`}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+                  >
+                    View profile
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(employee)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+                  >
+                    Edit
+                  </button>
+                  {employee.status === "active" && (
+                    <button
+                      type="button"
+                      onClick={() => handleArchive(employee)}
+                      disabled={isPending}
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/10 disabled:opacity-50"
+                    >
+                      Archive
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(employee)}
+                    disabled={isPending}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
 
       <EmployeeFormModal
         key={editingEmployee?.id ?? "create"}

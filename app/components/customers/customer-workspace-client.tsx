@@ -6,6 +6,9 @@ import { useState } from "react";
 import type { CustomerActivity } from "@/lib/customer-activities/types";
 import type { CustomerWorkspaceStats } from "@/lib/customers";
 import type { Customer } from "@/lib/customers/types";
+import type { CustomerTimelineEvent } from "@/lib/customers/timeline";
+import type { CustomerCommunicationsHub } from "@/lib/communications/types";
+import type { Employee } from "@/lib/employees/types";
 import type { CustomerStatus } from "@/lib/customers/status";
 import {
   ACTIVITY_TYPE_LABELS,
@@ -13,12 +16,16 @@ import {
 } from "@/lib/customer-activities/types";
 import { CustomerActivityPanel } from "./customer-activity-panel";
 import { CustomerAppointmentsPanel } from "./customer-appointments-panel";
+import { CustomerCommunicationsPanel } from "./customer-communications-panel";
 import { CustomerFormModal } from "./customer-form-modal";
 import { CustomerStatusBadge } from "./customer-status-badge";
 import { CustomerTasksPanel } from "./customer-tasks-panel";
+import { CustomerTimelinePanel } from "./customer-timeline-panel";
 
 const TABS = [
   { id: "overview", label: "Overview" },
+  { id: "timeline", label: "Timeline" },
+  { id: "communications", label: "Communications" },
   { id: "appointments", label: "Appointments" },
   { id: "tasks", label: "Tasks" },
   { id: "activity", label: "Activity" },
@@ -73,6 +80,10 @@ type CustomerWorkspaceClientProps = {
   status: CustomerStatus;
   stats: CustomerWorkspaceStats;
   recentActivities: CustomerActivity[];
+  timelineEvents: CustomerTimelineEvent[];
+  communicationsHub: CustomerCommunicationsHub;
+  employees: Employee[];
+  customers: Customer[];
   initialTab?: TabId;
 };
 
@@ -96,6 +107,10 @@ export function CustomerWorkspaceClient({
   status,
   stats,
   recentActivities,
+  timelineEvents,
+  communicationsHub,
+  employees,
+  customers,
   initialTab = "overview",
 }: CustomerWorkspaceClientProps) {
   const router = useRouter();
@@ -271,10 +286,10 @@ export function CustomerWorkspaceClient({
                 {recentActivities.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setActiveTab("activity")}
+                    onClick={() => setActiveTab("timeline")}
                     className="text-xs font-medium text-indigo-300 transition-colors hover:text-indigo-200"
                   >
-                    View all
+                    View timeline
                   </button>
                 )}
               </div>
@@ -312,6 +327,24 @@ export function CustomerWorkspaceClient({
               )}
             </div>
           </div>
+        )}
+
+        {activeTab === "timeline" && (
+          <CustomerTimelinePanel
+            customer={customer}
+            events={timelineEvents}
+            employees={employees}
+            customers={customers}
+          />
+        )}
+
+        {activeTab === "communications" && (
+          <CustomerCommunicationsPanel
+            customerId={customer.id}
+            customerEmail={customer.email}
+            employees={employees}
+            initialHub={communicationsHub}
+          />
         )}
 
         {activeTab === "appointments" && (

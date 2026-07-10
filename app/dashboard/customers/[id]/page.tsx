@@ -3,8 +3,11 @@ import { DashboardShell } from "@/app/components/dashboard/dashboard-shell";
 import { CustomerWorkspaceClient } from "@/app/components/customers/customer-workspace-client";
 import { getCustomerActivities } from "@/lib/customer-activities";
 import { getBusinessProfile } from "@/lib/business-profile";
+import { getCustomerCommunications } from "@/lib/communications/communications";
 import { getCustomer, getCustomerWorkspaceStats } from "@/lib/customers";
+import { getCustomerTimeline } from "@/lib/customers/get-customer-timeline";
 import { deriveCustomerStatus } from "@/lib/customers/status";
+import { getEmployees } from "@/lib/employees";
 import { createClient } from "@/lib/supabase/server";
 
 function getUserDisplay(user: {
@@ -28,6 +31,8 @@ type CustomerDetailPageProps = {
 function parseInitialTab(tab?: string) {
   if (
     tab === "overview" ||
+    tab === "timeline" ||
+    tab === "communications" ||
     tab === "appointments" ||
     tab === "tasks" ||
     tab === "activity"
@@ -56,9 +61,13 @@ export default async function CustomerDetailPage({
     notFound();
   }
 
-  const [stats, activities] = await Promise.all([
+  const [stats, activities, timelineEvents, employees, communicationsHub] =
+    await Promise.all([
     getCustomerWorkspaceStats(id),
     getCustomerActivities(id),
+    getCustomerTimeline(customer),
+    getEmployees(profile!.id),
+    getCustomerCommunications(id),
   ]);
 
   const status = deriveCustomerStatus(stats);
@@ -73,6 +82,10 @@ export default async function CustomerDetailPage({
           status={status}
           stats={stats}
           recentActivities={recentActivities}
+          timelineEvents={timelineEvents}
+          communicationsHub={communicationsHub}
+          employees={employees}
+          customers={[customer]}
           initialTab={parseInitialTab(tab)}
         />
       </div>

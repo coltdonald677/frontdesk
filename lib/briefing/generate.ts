@@ -1,5 +1,11 @@
-import { formatTimeDisplay } from "@/lib/appointments/datetime";
+import { formatTimeDisplay, getTodayIsoDate } from "@/lib/appointments/datetime";
 import { getBriefingInput } from "@/lib/briefing/data";
+import {
+  customerProfileLink,
+  customersLink,
+  scheduleLink,
+  tasksLink,
+} from "@/lib/dashboard/links";
 import type {
   BriefingBullet,
   BriefingInput,
@@ -67,7 +73,7 @@ function buildHighestPriority(input: BriefingInput): BriefingBullet | null {
 
     return {
       text: `${verb} ${customerName} before ${time}.`,
-      href: `/dashboard/customers/${nextAppointment.customer_id}?tab=appointments`,
+      href: scheduleLink({ date: nextAppointment.appointment_date }),
     };
   }
 
@@ -82,8 +88,8 @@ function buildHighestPriority(input: BriefingInput): BriefingBullet | null {
     return {
       text: `${label} — overdue and needs attention.`,
       href: overdueTask.customer_id
-        ? `/dashboard/customers/${overdueTask.customer_id}?tab=tasks`
-        : "/dashboard/tasks",
+        ? customerProfileLink(overdueTask.customer_id, "tasks")
+        : tasksLink({ filter: "overdue" }),
     };
   }
 
@@ -101,8 +107,8 @@ function buildHighestPriority(input: BriefingInput): BriefingBullet | null {
     return {
       text: `${label} before the day ends.`,
       href: dueTodayTask.customer_id
-        ? `/dashboard/customers/${dueTodayTask.customer_id}?tab=tasks`
-        : "/dashboard/tasks",
+        ? customerProfileLink(dueTodayTask.customer_id, "tasks")
+        : tasksLink({ filter: "due-today" }),
     };
   }
 
@@ -111,7 +117,7 @@ function buildHighestPriority(input: BriefingInput): BriefingBullet | null {
 
     return {
       text: `Check in with ${getCustomerLabel(customer)} — no activity in the last 30 days.`,
-      href: `/dashboard/customers/${customer.id}?tab=activity`,
+      href: customerProfileLink(customer.id, "communications"),
     };
   }
 
@@ -169,43 +175,44 @@ function buildSuggestions(input: BriefingInput): string[] {
 }
 
 export function generateDailyBriefing(input: BriefingInput): DailyBriefing {
+  const today = getTodayIsoDate();
   const greeting = `${getGreeting()}, ${input.displayName}.`;
   const bullets = [
     formatCountBullet(
       input.appointmentsToday.length,
       "appointment today",
       "appointments today",
-      "/dashboard/schedule",
+      scheduleLink({ date: today }),
     ),
     formatCountBullet(
       input.overdueTasksCount,
       "overdue task",
       "overdue tasks",
-      "/dashboard/tasks",
+      tasksLink({ filter: "overdue" }),
     ),
     formatCountBullet(
       input.tasksDueTodayCount,
       "task due today",
       "tasks due today",
-      "/dashboard/tasks",
+      tasksLink({ filter: "due-today" }),
     ),
     input.inactiveCustomers.length > 0
       ? {
           text: `${input.inactiveCustomers.length} inactive ${pluralize(input.inactiveCustomers.length, "customer")} that should be contacted`,
-          href: "/dashboard/customers",
+          href: customersLink({ filter: "inactive" }),
         }
       : null,
     formatCountBullet(
       input.customersAddedThisWeek,
       "customer added this week",
       "customers added this week",
-      "/dashboard/customers",
+      customersLink(),
     ),
     formatCountBullet(
       input.appointmentsThisWeek,
       "appointment remaining this week",
       "appointments remaining this week",
-      "/dashboard/schedule",
+      scheduleLink({ date: today, view: "week" }),
     ),
   ].filter((bullet): bullet is BriefingBullet => bullet !== null);
 

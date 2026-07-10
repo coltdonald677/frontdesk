@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { deleteCustomer } from "@/app/dashboard/customers/actions";
+import type { CustomerFilter } from "@/lib/dashboard/links";
 import type { Customer } from "@/lib/customers/types";
 import { CustomerFormModal } from "./customer-form-modal";
 
 type CustomersClientProps = {
   customers: Customer[];
+  initialFilter?: CustomerFilter;
+  inactiveCustomerIds?: string[];
+  openNewCustomer?: boolean;
 };
 
 function getInitials(name: string) {
@@ -21,7 +25,12 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-export function CustomersClient({ customers }: CustomersClientProps) {
+export function CustomersClient({
+  customers,
+  initialFilter,
+  inactiveCustomerIds,
+  openNewCustomer = false,
+}: CustomersClientProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -29,14 +38,27 @@ export function CustomersClient({ customers }: CustomersClientProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    if (openNewCustomer) {
+      setEditingCustomer(null);
+      setModalOpen(true);
+    }
+  }, [openNewCustomer]);
+
   const filteredCustomers = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const inactiveIds = new Set(inactiveCustomerIds ?? []);
+
+    const baseCustomers =
+      initialFilter === "inactive"
+        ? customers.filter((customer) => inactiveIds.has(customer.id))
+        : customers;
 
     if (!query) {
-      return customers;
+      return baseCustomers;
     }
 
-    return customers.filter((customer) => {
+    return baseCustomers.filter((customer) => {
       const haystack = [
         customer.name,
         customer.company ?? "",
@@ -49,7 +71,7 @@ export function CustomersClient({ customers }: CustomersClientProps) {
 
       return haystack.includes(query);
     });
-  }, [customers, search]);
+  }, [customers, search, initialFilter, inactiveCustomerIds]);
 
   const openCreateModal = () => {
     setEditingCustomer(null);
@@ -134,6 +156,12 @@ export function CustomersClient({ customers }: CustomersClientProps) {
           Add customer
         </button>
       </div>
+
+      {initialFilter === "inactive" && (
+        <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
+          Showing customers with no activity in the last 30 days
+        </div>
+      )}
 
       {deleteError && (
         <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">

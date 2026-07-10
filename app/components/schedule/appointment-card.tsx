@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   formatTimeDisplay,
   formatTimeRange,
@@ -11,8 +12,13 @@ import {
   STATUS_TIME_STYLES,
   type AppointmentWithCustomer,
 } from "@/lib/appointments/types";
+import {
+  AssignedEmployeeLabel,
+  normalizeAssignedEmployee,
+} from "@/app/components/employees/assigned-employee-label";
+import { EmployeeAvatar } from "@/app/components/employees/employee-avatar";
+import { AppointmentHoverTooltip } from "./appointment-hover-tooltip";
 import { CustomerAvatar } from "./customer-avatar";
-import { AssignedEmployeeLabel } from "@/app/components/employees/assigned-employee-label";
 
 type AppointmentCardVariant = "default" | "compact" | "month";
 
@@ -60,112 +66,153 @@ export function AppointmentCard({
   const customerCompany = appointment.customers?.company;
   const customerLabel = getCustomerLabel(customerName, customerCompany);
 
+  const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
+  const [hoverVisible, setHoverVisible] = useState(false);
+
   const dragClasses = isDragging
     ? "cursor-grabbing opacity-50"
     : draggable
       ? "cursor-grab active:cursor-grabbing"
       : "cursor-pointer";
 
+  const hideHoverDetails = () => {
+    setHoverVisible(false);
+    setHoverRect(null);
+  };
+
+  const handleMouseEnter = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (isDragging) {
+      return;
+    }
+    setHoverRect(event.currentTarget.getBoundingClientRect());
+    setHoverVisible(true);
+  };
+
+  const handleDragStart = (
+    event: React.DragEvent<HTMLButtonElement>,
+  ) => {
+    hideHoverDetails();
+    if (draggable && onDragStart) {
+      onDragStart(event, appointment);
+    }
+  };
+
+  const hoverTooltip = (
+    <AppointmentHoverTooltip
+      appointment={appointment}
+      anchorRect={hoverRect}
+      visible={hoverVisible && !isDragging}
+    />
+  );
+
   if (resolvedVariant === "month") {
+    const assignedEmployee = normalizeAssignedEmployee(appointment.employees);
+
     return (
-      <button
-        type="button"
-        draggable={draggable}
-        onDragStart={
-          draggable && onDragStart
-            ? (event) => onDragStart(event, appointment)
-            : undefined
-        }
-        onDragEnd={onDragEnd}
-        onClick={() => onSelect(appointment)}
-        className={`block w-full shrink-0 overflow-hidden rounded border px-1.5 py-1 text-left transition-all ${STATUS_CARD_STYLES[appointment.status]} hover:brightness-110 ${dragClasses}`}
-      >
-        <div className="flex min-w-0 items-center gap-1">
-          <span
-            className={`shrink-0 text-[10px] font-semibold leading-none ${STATUS_TIME_STYLES[appointment.status]}`}
-          >
-            {formatTimeDisplay(appointment.start_time)}
-          </span>
-          <span className="min-w-0 truncate text-[10px] font-medium leading-tight text-white">
-            {appointment.title}
-          </span>
-        </div>
-        {customerLabel && (
-          <p className="mt-0.5 truncate text-[10px] leading-tight text-zinc-500">
-            {customerLabel}
-          </p>
-        )}
-        <AssignedEmployeeLabel
-          employee={appointment.employees}
-          size="xs"
-          className="mt-0.5"
-        />
-      </button>
+      <>
+        <button
+          type="button"
+          draggable={draggable}
+          onDragStart={
+            draggable && onDragStart
+              ? (event) => {
+                  event.stopPropagation();
+                  hideHoverDetails();
+                  onDragStart(event, appointment);
+                }
+              : undefined
+          }
+          onDragEnd={onDragEnd}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={hideHoverDetails}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect(appointment);
+          }}
+          className={`block w-full max-w-full shrink-0 overflow-hidden rounded border px-1 py-0.5 text-left transition-all ${STATUS_CARD_STYLES[appointment.status]} hover:brightness-110 ${dragClasses}`}
+        >
+          <div className="flex min-w-0 items-center gap-1">
+            <span
+              className={`shrink-0 text-[10px] font-semibold leading-none tabular-nums ${STATUS_TIME_STYLES[appointment.status]}`}
+            >
+              {formatTimeDisplay(appointment.start_time)}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[10px] font-medium leading-tight text-white">
+              {appointment.title}
+            </span>
+            {assignedEmployee && (
+              <EmployeeAvatar employee={assignedEmployee} size="xs" />
+            )}
+          </div>
+        </button>
+        {hoverTooltip}
+      </>
     );
   }
 
   const isCompact = resolvedVariant === "compact";
 
   return (
-    <button
-      type="button"
-      draggable={draggable}
-      onDragStart={
-        draggable && onDragStart
-          ? (event) => onDragStart(event, appointment)
-          : undefined
-      }
-      onDragEnd={onDragEnd}
-      onClick={() => onSelect(appointment)}
-      className={`flex w-full items-start gap-2 rounded-lg border text-left transition-all ${STATUS_CARD_STYLES[appointment.status]} hover:brightness-110 ${
-        isCompact ? "px-2.5 py-2" : "px-4 py-3"
-      } ${dragClasses}`}
-    >
-      <CustomerAvatar
-        name={customerName}
-        company={customerCompany}
-        size={isCompact ? "sm" : "md"}
-      />
+    <>
+      <button
+        type="button"
+        draggable={draggable}
+        onDragStart={draggable ? handleDragStart : undefined}
+        onDragEnd={onDragEnd}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={hideHoverDetails}
+        onClick={() => onSelect(appointment)}
+        className={`flex w-full items-start gap-2 rounded-lg border text-left transition-all ${STATUS_CARD_STYLES[appointment.status]} hover:brightness-110 ${
+          isCompact ? "px-2.5 py-2" : "px-4 py-3"
+        } ${dragClasses}`}
+      >
+        <CustomerAvatar
+          name={customerName}
+          company={customerCompany}
+          size={isCompact ? "sm" : "md"}
+        />
 
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <p
-            className={`min-w-0 truncate font-medium text-white ${isCompact ? "text-xs" : "text-sm"}`}
-          >
-            {appointment.title}
-          </p>
-          {!isCompact && (
-            <span
-              className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[appointment.status]}`}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p
+              className={`min-w-0 truncate font-medium text-white ${isCompact ? "text-xs" : "text-sm"}`}
             >
-              {STATUS_LABELS[appointment.status]}
-            </span>
+              {appointment.title}
+            </p>
+            {!isCompact && (
+              <span
+                className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[appointment.status]}`}
+              >
+                {STATUS_LABELS[appointment.status]}
+              </span>
+            )}
+          </div>
+          <p
+            className={`mt-1 truncate ${STATUS_TIME_STYLES[appointment.status]} ${isCompact ? "text-[11px]" : "text-xs"}`}
+          >
+            {formatTimeRange(appointment.start_time, appointment.end_time)}
+          </p>
+          {customerName && (
+            <p
+              className={`mt-1 truncate text-zinc-400 ${isCompact ? "text-[11px]" : "text-xs"}`}
+            >
+              {customerName}
+              {customerCompany ? ` · ${customerCompany}` : ""}
+            </p>
+          )}
+          <AssignedEmployeeLabel
+            employee={appointment.employees}
+            size={isCompact ? "xs" : "sm"}
+            className={customerName ? "mt-1.5" : "mt-1"}
+          />
+          {!isCompact && appointment.notes && (
+            <p className="mt-2 line-clamp-2 text-sm text-zinc-400">
+              {appointment.notes}
+            </p>
           )}
         </div>
-        <p
-          className={`mt-1 truncate ${STATUS_TIME_STYLES[appointment.status]} ${isCompact ? "text-[11px]" : "text-xs"}`}
-        >
-          {formatTimeRange(appointment.start_time, appointment.end_time)}
-        </p>
-        {customerName && (
-          <p
-            className={`mt-1 truncate text-zinc-400 ${isCompact ? "text-[11px]" : "text-xs"}`}
-          >
-            {customerName}
-            {customerCompany ? ` · ${customerCompany}` : ""}
-          </p>
-        )}
-        <AssignedEmployeeLabel
-          employee={appointment.employees}
-          size={isCompact ? "xs" : "sm"}
-          className={customerName ? "mt-1.5" : "mt-1"}
-        />
-        {!isCompact && appointment.notes && (
-          <p className="mt-2 line-clamp-2 text-sm text-zinc-400">
-            {appointment.notes}
-          </p>
-        )}
-      </div>
-    </button>
+      </button>
+      {hoverTooltip}
+    </>
   );
 }

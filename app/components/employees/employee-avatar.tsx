@@ -3,13 +3,15 @@ import { getEmployeeColorGradient, getEmployeeInitials } from "@/lib/employees/c
 
 type EmployeeAvatarProps = {
   employee: Pick<Employee, "full_name" | "color">;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
 };
 
 const sizeClasses = {
+  xs: "h-4 w-4 text-[7px]",
   sm: "h-8 w-8 text-xs",
   md: "h-10 w-10 text-sm",
   lg: "h-14 w-14 text-base",
+  xl: "h-20 w-20 text-xl",
 };
 
 export function EmployeeAvatar({ employee, size = "md" }: EmployeeAvatarProps) {

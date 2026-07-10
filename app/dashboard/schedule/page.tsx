@@ -5,6 +5,10 @@ import {
   getAppointmentsByDateRange,
 } from "@/lib/appointments";
 import {
+  parseScheduleFilter,
+  resolveScheduleDate,
+} from "@/lib/dashboard/links";
+import {
   getMonthEnd,
   getMonthStart,
   getTodayIsoDate,
@@ -40,7 +44,12 @@ function parseScheduleView(value?: string): ScheduleView {
 }
 
 type SchedulePageProps = {
-  searchParams: Promise<{ date?: string; view?: string }>;
+  searchParams: Promise<{
+    date?: string;
+    view?: string;
+    filter?: string;
+    new?: string;
+  }>;
 };
 
 export default async function SchedulePage({ searchParams }: SchedulePageProps) {
@@ -52,20 +61,24 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
   const profile = await getBusinessProfile();
   const params = await searchParams;
   const today = getTodayIsoDate();
-  const selectedDate =
-    params.date && isValidIsoDate(params.date) ? params.date : today;
+  const selectedDate = params.date
+    ? resolveScheduleDate(params.date)
+    : today;
+  const safeSelectedDate = isValidIsoDate(selectedDate) ? selectedDate : today;
   const view = parseScheduleView(params.view);
+  const initialFilter = parseScheduleFilter(params.filter);
+  const openNewAppointment = params.new === "appointment";
 
   const [rangeStart, rangeEnd] =
     view === "month"
-      ? [getMonthStart(selectedDate), getMonthEnd(selectedDate)]
+      ? [getMonthStart(safeSelectedDate), getMonthEnd(safeSelectedDate)]
       : view === "week"
-        ? [getWeekStart(selectedDate), getWeekEnd(selectedDate)]
-        : [selectedDate, selectedDate];
+        ? [getWeekStart(safeSelectedDate), getWeekEnd(safeSelectedDate)]
+        : [safeSelectedDate, safeSelectedDate];
 
   const [appointments, customers, employees] = await Promise.all([
     view === "day"
-      ? getAppointmentsByDate(profile!.id, selectedDate)
+      ? getAppointmentsByDate(profile!.id, safeSelectedDate)
       : getAppointmentsByDateRange(profile!.id, rangeStart, rangeEnd),
     getCustomers(profile!.id),
     getEmployees(profile!.id),
@@ -92,8 +105,10 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           appointments={appointments}
           customers={customers}
           employees={employees}
-          selectedDate={selectedDate}
+          selectedDate={safeSelectedDate}
           view={view}
+          initialFilter={initialFilter}
+          openNewAppointment={openNewAppointment}
         />
       </div>
     </DashboardShell>

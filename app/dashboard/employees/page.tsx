@@ -1,7 +1,8 @@
 import { DashboardShell } from "@/app/components/dashboard/dashboard-shell";
 import { EmployeesClient } from "@/app/components/employees/employees-client";
 import { getBusinessProfile } from "@/lib/business-profile";
-import { getEmployees } from "@/lib/employees";
+import { getEmployees, getEmployeesListStats } from "@/lib/employees";
+import { parseEmployeeFocus } from "@/lib/dashboard/links";
 import { createClient } from "@/lib/supabase/server";
 
 function getUserDisplay(user: {
@@ -17,14 +18,28 @@ function getUserDisplay(user: {
   return { displayName, initials };
 }
 
-export default async function EmployeesPage() {
+type EmployeesPageProps = {
+  searchParams: Promise<{ focus?: string; new?: string }>;
+};
+
+export default async function EmployeesPage({
+  searchParams,
+}: EmployeesPageProps) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const profile = await getBusinessProfile();
+  const params = await searchParams;
+  const initialFocus = parseEmployeeFocus(params.focus);
+  const openNewEmployee = params.new === "employee";
   const employees = await getEmployees(profile!.id, { includeInactive: true });
+  const statsMap = await getEmployeesListStats(
+    profile!.id,
+    employees.map((employee) => employee.id),
+  );
+  const statsByEmployeeId = Object.fromEntries(statsMap);
   const { displayName, initials } = getUserDisplay(user!);
 
   return (
@@ -35,11 +50,17 @@ export default async function EmployeesPage() {
             Employees
           </h1>
           <p className="mt-2 text-zinc-400">
-            Manage your team and assign work for {profile!.business_name}.
+            Manage your team, track workload, and assign work for{" "}
+            {profile!.business_name}.
           </p>
         </div>
 
-        <EmployeesClient employees={employees} />
+        <EmployeesClient
+          employees={employees}
+          statsByEmployeeId={statsByEmployeeId}
+          initialFocus={initialFocus}
+          openNewEmployee={openNewEmployee}
+        />
       </div>
     </DashboardShell>
   );

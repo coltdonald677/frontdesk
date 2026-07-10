@@ -119,3 +119,64 @@ export async function getCustomerCount(businessProfileId: string) {
 
   return count ?? 0;
 }
+
+export type InactiveCustomerSummary = {
+  id: string;
+  name: string;
+  company: string | null;
+};
+
+function getThirtyDaysAgoTimestamp() {
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+  return date.toISOString();
+}
+
+function getInactiveExcludeTimestamp() {
+  const date = new Date();
+  date.setDate(date.getDate() - 7);
+  return date.toISOString();
+}
+
+export async function getInactiveCustomers(
+  businessProfileId: string,
+): Promise<InactiveCustomerSummary[]> {
+  const supabase = await createClient();
+  const thirtyDaysAgo = getThirtyDaysAgoTimestamp();
+  const excludeRecent = getInactiveExcludeTimestamp();
+
+  const [{ data: customers, error: customersError }, { data: recentActivity, error: activityError }] =
+    await Promise.all([
+      supabase
+        .from("customers")
+        .select("id, name, company, created_at")
+        .eq("business_profile_id", businessProfileId)
+        .lt("created_at", excludeRecent)
+        .order("name", { ascending: true }),
+      supabase
+        .from("customer_activities")
+        .select("customer_id")
+        .eq("business_profile_id", businessProfileId)
+        .gte("created_at", thirtyDaysAgo),
+    ]);
+
+  if (customersError) {
+    throw new Error(customersError.message);
+  }
+
+  if (activityError) {
+    throw new Error(activityError.message);
+  }
+
+  const activeCustomerIds = new Set(
+    (recentActivity ?? []).map((activity) => activity.customer_id),
+  );
+
+  return (customers ?? [])
+    .filter((customer) => !activeCustomerIds.has(customer.id))
+    .map((customer) => ({
+      id: customer.id,
+      name: customer.name,
+      company: customer.company,
+    }));
+}

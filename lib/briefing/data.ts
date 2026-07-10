@@ -8,28 +8,14 @@ import {
   getWeekEnd,
   getWeekStart,
 } from "@/lib/appointments/datetime";
-import { getCustomerCount } from "@/lib/customers";
+import { getCustomerCount, getInactiveCustomers } from "@/lib/customers";
 import { getOverdueTaskCount } from "@/lib/tasks";
 import { getTodayIsoDate as getTaskToday } from "@/lib/tasks/due-date";
 import type { TaskWithCustomer } from "@/lib/tasks/types";
-import type { BriefingInput, InactiveCustomer } from "@/lib/briefing/types";
-
-const INACTIVE_EXCLUDE_DAYS = 7;
+import type { BriefingInput } from "@/lib/briefing/types";
 
 function getWeekStartTimestamp(isoDate: string) {
   return new Date(`${getWeekStart(isoDate)}T00:00:00`).toISOString();
-}
-
-function getThirtyDaysAgoTimestamp() {
-  const date = new Date();
-  date.setDate(date.getDate() - 30);
-  return date.toISOString();
-}
-
-function getInactiveExcludeTimestamp() {
-  const date = new Date();
-  date.setDate(date.getDate() - INACTIVE_EXCLUDE_DAYS);
-  return date.toISOString();
 }
 
 async function getTasksDueToday(businessProfileId: string) {
@@ -73,49 +59,6 @@ async function getOverdueTasks(businessProfileId: string) {
   return ((data ?? []) as TaskWithCustomer[]).sort(
     (a, b) => priorityRank[a.priority] - priorityRank[b.priority],
   );
-}
-
-async function getInactiveCustomers(
-  businessProfileId: string,
-): Promise<InactiveCustomer[]> {
-  const supabase = await createClient();
-  const thirtyDaysAgo = getThirtyDaysAgoTimestamp();
-  const excludeRecent = getInactiveExcludeTimestamp();
-
-  const [{ data: customers, error: customersError }, { data: recentActivity, error: activityError }] =
-    await Promise.all([
-      supabase
-        .from("customers")
-        .select("id, name, company, created_at")
-        .eq("business_profile_id", businessProfileId)
-        .lt("created_at", excludeRecent)
-        .order("name", { ascending: true }),
-      supabase
-        .from("customer_activities")
-        .select("customer_id")
-        .eq("business_profile_id", businessProfileId)
-        .gte("created_at", thirtyDaysAgo),
-    ]);
-
-  if (customersError) {
-    throw new Error(customersError.message);
-  }
-
-  if (activityError) {
-    throw new Error(activityError.message);
-  }
-
-  const activeCustomerIds = new Set(
-    (recentActivity ?? []).map((activity) => activity.customer_id),
-  );
-
-  return (customers ?? [])
-    .filter((customer) => !activeCustomerIds.has(customer.id))
-    .map((customer) => ({
-      id: customer.id,
-      name: customer.name,
-      company: customer.company,
-    }));
 }
 
 async function getCustomersAddedThisWeekCount(

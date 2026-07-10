@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { moveAppointmentDate } from "@/app/dashboard/schedule/actions";
 import { AppointmentCard } from "./appointment-card";
 import { AppointmentDetailModal } from "./appointment-detail-modal";
+import { useScrollFade } from "./use-scroll-fade";
 import {
   addDaysToIsoDate,
   addMonthsToIsoDate,
@@ -36,10 +37,13 @@ import {
   type AppointmentStatusFilter,
   type AppointmentWithCustomer,
 } from "@/lib/appointments/types";
+import type { ScheduleFilter } from "@/lib/dashboard/links";
 import type { Customer } from "@/lib/customers/types";
 import type { Employee } from "@/lib/employees/types";
 
 type ScheduleView = "day" | "week" | "month";
+
+type ScheduleListFilter = AppointmentStatusFilter | "unassigned";
 
 type ScheduleClientProps = {
   appointments: AppointmentWithCustomer[];
@@ -47,10 +51,13 @@ type ScheduleClientProps = {
   employees: Employee[];
   selectedDate: string;
   view: ScheduleView;
+  initialFilter?: ScheduleFilter;
+  openNewAppointment?: boolean;
 };
 
-const FILTER_OPTIONS: { value: AppointmentStatusFilter; label: string }[] = [
+const FILTER_OPTIONS: { value: ScheduleListFilter; label: string }[] = [
   { value: "all", label: "All" },
+  { value: "unassigned", label: "Unassigned" },
   { value: "scheduled", label: "Scheduled" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
@@ -58,14 +65,47 @@ const FILTER_OPTIONS: { value: AppointmentStatusFilter; label: string }[] = [
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_VISIBLE_APPOINTMENTS = 2;
-const MONTH_CELL_HEIGHT = "7rem";
+const MONTH_CELL_HEIGHT = "7.5rem";
 
-function buildScheduleUrl(date: string, view: ScheduleView) {
+function buildScheduleUrl(
+  date: string,
+  view: ScheduleView,
+  filter: ScheduleListFilter = "all",
+) {
   const params = new URLSearchParams({ date });
   if (view !== "day") {
     params.set("view", view);
   }
+  if (filter !== "all") {
+    params.set("filter", filter);
+  }
   return `/dashboard/schedule?${params.toString()}`;
+}
+
+function mapInitialFilter(filter?: ScheduleFilter): ScheduleListFilter {
+  if (!filter) {
+    return "all";
+  }
+
+  return filter;
+}
+
+function getActiveFilterClass(value: ScheduleListFilter) {
+  if (value === "all") {
+    return "border-indigo-500/30 bg-indigo-500/10 text-indigo-300";
+  }
+
+  if (value === "unassigned") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+  }
+
+  return STATUS_STYLES[value];
+}
+
+function sortAppointmentsByTime(appointments: AppointmentWithCustomer[]) {
+  return [...appointments].sort((a, b) =>
+    a.start_time.localeCompare(b.start_time),
+  );
 }
 
 function groupAppointmentsByDate(
@@ -81,6 +121,9 @@ function groupAppointmentsByDate(
     if (dayAppointments) {
       dayAppointments.push(appointment);
     }
+  }
+  for (const [date, dayAppointments] of grouped) {
+    grouped.set(date, sortAppointmentsByTime(dayAppointments));
   }
   return grouped;
 }
@@ -99,7 +142,6 @@ function DayColumn({
   onDrop,
   dropTargetDate,
   onDragOver,
-  compactLimit,
 }: {
   date: string;
   appointments: AppointmentWithCustomer[];
@@ -117,19 +159,13 @@ function DayColumn({
   onDrop?: (event: React.DragEvent<HTMLDivElement>, date: string) => void;
   dropTargetDate?: string | null;
   onDragOver?: (event: React.DragEvent<HTMLDivElement>, date: string) => void;
-  compactLimit?: number;
 }) {
-  const visibleAppointments = compactLimit
-    ? appointments.slice(0, compactLimit)
-    : appointments;
-  const hiddenCount = compactLimit
-    ? Math.max(appointments.length - compactLimit, 0)
-    : 0;
   const isDropTarget = dropTargetDate === date;
+  const { scrollRef, showFade } = useScrollFade([appointments.length]);
 
   return (
     <div
-      className={`flex min-h-52 min-w-[9.5rem] flex-col rounded-xl border bg-zinc-900/40 ${
+      className={`flex h-[20rem] min-w-[9.5rem] flex-col overflow-hidden rounded-xl border bg-zinc-900/40 ${
         isToday
           ? "border-indigo-500/30 ring-1 ring-indigo-500/20"
           : "border-white/[0.06]"
@@ -162,18 +198,21 @@ function DayColumn({
         </p>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2">
-        {appointments.length === 0 ? (
-          <button
-            type="button"
-            onClick={() => onCreate(date)}
-            className="mx-auto flex min-h-[2.5rem] w-full max-w-[10rem] items-center justify-center rounded-lg border border-dashed border-white/[0.08] px-3 text-xs text-zinc-500 transition-colors hover:border-indigo-500/20 hover:bg-white/[0.02] hover:text-zinc-300"
-          >
-            Add appointment
-          </button>
-        ) : (
-          <>
-            {visibleAppointments.map((appointment) => (
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollRef}
+          className="flex h-full flex-col gap-1.5 overflow-y-auto overscroll-contain p-2 [scrollbar-color:rgba(255,255,255,0.12)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent"
+        >
+          {appointments.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => onCreate(date)}
+              className="mx-auto flex min-h-[2.5rem] w-full max-w-[10rem] items-center justify-center rounded-lg border border-dashed border-white/[0.08] px-3 text-xs text-zinc-500 transition-colors hover:border-indigo-500/20 hover:bg-white/[0.02] hover:text-zinc-300"
+            >
+              Add appointment
+            </button>
+          ) : (
+            appointments.map((appointment) => (
               <AppointmentCard
                 key={appointment.id}
                 appointment={appointment}
@@ -184,13 +223,15 @@ function DayColumn({
                 onDragEnd={onDragEnd}
                 isDragging={draggingId === appointment.id}
               />
-            ))}
-            {hiddenCount > 0 && (
-              <p className="px-1 text-center text-[11px] text-zinc-500">
-                +{hiddenCount} more
-              </p>
-            )}
-          </>
+            ))
+          )}
+        </div>
+
+        {showFade && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-zinc-950/95 via-zinc-950/60 to-transparent"
+          />
         )}
       </div>
     </div>
@@ -203,12 +244,15 @@ export function ScheduleClient({
   employees,
   selectedDate,
   view,
+  initialFilter,
+  openNewAppointment = false,
 }: ScheduleClientProps) {
   const router = useRouter();
   const today = getTodayIsoDate();
   const [isPending, startTransition] = useTransition();
-  const [statusFilter, setStatusFilter] =
-    useState<AppointmentStatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<ScheduleListFilter>(() =>
+    mapInitialFilter(initialFilter),
+  );
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentWithCustomer | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -216,6 +260,7 @@ export function ScheduleClient({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const suppressDayNavigationRef = useRef(false);
 
   const weekStart = getWeekStart(selectedDate);
   const weekEnd = getWeekEnd(selectedDate);
@@ -238,10 +283,22 @@ export function ScheduleClient({
     if (statusFilter === "all") {
       return appointments;
     }
+
+    if (statusFilter === "unassigned") {
+      return appointments.filter((appointment) => appointment.employee_id === null);
+    }
+
     return appointments.filter(
       (appointment) => appointment.status === statusFilter,
     );
   }, [appointments, statusFilter]);
+
+  useEffect(() => {
+    if (openNewAppointment) {
+      setCreateDefaultDate(selectedDate);
+      setShowCreateModal(true);
+    }
+  }, [openNewAppointment, selectedDate]);
 
   const appointmentsByDate = useMemo(() => {
     const dates =
@@ -258,11 +315,18 @@ export function ScheduleClient({
   ).length;
 
   const navigateToDate = (date: string) => {
-    router.push(buildScheduleUrl(date, view));
+    router.push(buildScheduleUrl(date, view, statusFilter));
+  };
+
+  const navigateToDayView = (date: string) => {
+    if (suppressDayNavigationRef.current) {
+      return;
+    }
+    router.push(buildScheduleUrl(date, "day", statusFilter));
   };
 
   const switchView = (nextView: ScheduleView) => {
-    router.push(buildScheduleUrl(selectedDate, nextView));
+    router.push(buildScheduleUrl(selectedDate, nextView, statusFilter));
   };
 
   const openCreateModal = (date = selectedDate) => {
@@ -319,6 +383,10 @@ export function ScheduleClient({
         return;
       }
       setMoveError(null);
+      suppressDayNavigationRef.current = true;
+      window.setTimeout(() => {
+        suppressDayNavigationRef.current = false;
+      }, 0);
       router.refresh();
     });
   };
@@ -440,9 +508,7 @@ export function ScheduleClient({
                 onClick={() => setStatusFilter(option.value)}
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                   statusFilter === option.value
-                    ? option.value === "all"
-                      ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-300"
-                      : STATUS_STYLES[option.value as (typeof APPOINTMENT_STATUSES)[number]]
+                    ? getActiveFilterClass(option.value)
                     : "border-white/[0.06] bg-zinc-900/50 text-zinc-400 hover:text-zinc-200"
                 }`}
               >
@@ -489,7 +555,9 @@ export function ScheduleClient({
               title={
                 statusFilter === "all"
                   ? "Nothing on the calendar"
-                  : `No ${statusFilter} appointments`
+                  : statusFilter === "unassigned"
+                    ? "No unassigned appointments"
+                    : `No ${statusFilter} appointments`
               }
               description={
                 statusFilter === "all"
@@ -543,7 +611,7 @@ export function ScheduleClient({
           </div>
 
           <div className="overflow-x-auto p-4">
-            <div className="grid min-w-[52rem] gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+            <div className="grid min-w-[52rem] items-start gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
               {weekDates.map((date) => (
               <DayColumn
                 key={date}
@@ -606,13 +674,15 @@ export function ScheduleClient({
               return (
                 <div
                   key={date}
-                  className={`flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-zinc-900/40 ${
+                  title="View day schedule"
+                  className={`group/cell flex h-full min-h-0 cursor-pointer flex-col overflow-hidden rounded-lg border bg-zinc-900/40 transition-colors hover:bg-zinc-800/35 ${
                     isToday
                       ? "border-indigo-500/30 ring-1 ring-indigo-500/20"
-                      : "border-white/[0.06]"
+                      : "border-white/[0.06] hover:border-white/[0.1]"
                   } ${!inCurrentMonth ? "opacity-50" : ""} ${
                     isDropTarget ? "ring-2 ring-indigo-400/40" : ""
                   }`}
+                  onClick={() => navigateToDayView(date)}
                   onDragOver={(event) => handleDragOver(event, date)}
                   onDrop={(event) => handleDrop(event, date)}
                 >
@@ -630,8 +700,20 @@ export function ScheduleClient({
                     >
                       {formatMonthDayNumber(date)}
                     </span>
-                    <span className="text-[10px] leading-none text-zinc-500">
-                      {dayAppointments.length}
+                    <span className="text-[10px] leading-none text-zinc-500 group-hover/cell:text-zinc-400">
+                      {dayAppointments.length > 0 ? (
+                        <>
+                          {dayAppointments.length}
+                          <span className="hidden sm:inline">
+                            {" "}
+                            · View day
+                          </span>
+                        </>
+                      ) : (
+                        <span className="opacity-0 transition-opacity group-hover/cell:opacity-100">
+                          View day
+                        </span>
+                      )}
                     </span>
                   </div>
 
@@ -645,7 +727,10 @@ export function ScheduleClient({
                     {dayAppointments.length === 0 ? (
                       <button
                         type="button"
-                        onClick={() => openCreateModal(date)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openCreateModal(date);
+                        }}
                         className="flex h-6 w-6 items-center justify-center self-center rounded-md border border-dashed border-white/[0.08] text-xs text-zinc-600 transition-colors hover:border-indigo-500/20 hover:bg-white/[0.02] hover:text-zinc-400"
                         aria-label={`Add appointment on ${formatShortDayHeader(date)}`}
                       >
@@ -668,12 +753,12 @@ export function ScheduleClient({
                         {hiddenCount > 0 && (
                           <button
                             type="button"
-                            onClick={() =>
-                              router.push(
-                                `/dashboard/schedule?date=${date}`,
-                              )
-                            }
-                            className="shrink-0 truncate px-0.5 py-0.5 text-left text-[10px] leading-tight text-zinc-500 transition-colors hover:text-indigo-300"
+                            title="View day schedule"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              navigateToDayView(date);
+                            }}
+                            className="shrink-0 truncate rounded border border-white/[0.06] bg-zinc-800/40 px-1 py-0.5 text-left text-[10px] font-medium leading-tight text-zinc-400 transition-colors hover:border-indigo-500/20 hover:bg-indigo-500/10 hover:text-indigo-300"
                           >
                             +{hiddenCount} more
                           </button>

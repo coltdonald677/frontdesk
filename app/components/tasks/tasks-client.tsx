@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { QuickTaskModal } from "@/app/components/dashboard/quick-task-modal";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { AssignedEmployeeLabel } from "@/app/components/employees/assigned-employee-label";
 import {
@@ -11,6 +12,10 @@ import {
   type TaskActionState,
 } from "@/app/dashboard/tasks/actions";
 import { DueDateBadge } from "@/app/components/tasks/due-date-badge";
+import type { TaskFilter } from "@/lib/dashboard/links";
+import type { Customer } from "@/lib/customers/types";
+import type { Employee } from "@/lib/employees/types";
+import { filterOpenTasks, TASK_FILTER_LABELS } from "@/lib/tasks/filter-tasks";
 import { getDueDateInfo } from "@/lib/tasks/due-date";
 import {
   PRIORITY_LABELS,
@@ -63,15 +68,38 @@ function CompleteTaskCheckbox({ taskTitle }: { taskTitle: string }) {
 type TasksClientProps = {
   openTasks: TaskWithCustomer[];
   completedTasks: TaskWithCustomer[];
+  initialFilter?: TaskFilter;
+  openNewTask?: boolean;
+  customers?: Customer[];
+  employees?: Employee[];
 };
 
-export function TasksClient({ openTasks, completedTasks }: TasksClientProps) {
+export function TasksClient({
+  openTasks,
+  completedTasks,
+  initialFilter,
+  openNewTask = false,
+  customers = [],
+  employees = [],
+}: TasksClientProps) {
   const router = useRouter();
   const [state, formAction] = useActionState<TaskActionState, FormData>(
     completeTaskFormAction,
     {},
   );
   const handledSuccess = useRef(false);
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+
+  const filteredOpenTasks = useMemo(
+    () => filterOpenTasks(openTasks, initialFilter),
+    [openTasks, initialFilter],
+  );
+
+  useEffect(() => {
+    if (openNewTask) {
+      setShowNewTaskModal(true);
+    }
+  }, [openNewTask]);
 
   useEffect(() => {
     if (state.success && !handledSuccess.current) {
@@ -92,17 +120,23 @@ export function TasksClient({ openTasks, completedTasks }: TasksClientProps) {
         </div>
       )}
 
+      {initialFilter && initialFilter !== "open" && (
+        <div className="mb-4 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-4 py-3 text-sm text-indigo-200">
+          Showing {TASK_FILTER_LABELS[initialFilter].toLowerCase()} tasks
+        </div>
+      )}
+
       <section className="overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-900/50 backdrop-blur-sm">
         <div className="border-b border-white/[0.06] px-5 py-4">
           <h2 className="text-sm font-semibold text-white">Open Tasks</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
-            {openTasks.length === 0
+            {filteredOpenTasks.length === 0
               ? "Nothing on your plate right now"
-              : `${openTasks.length} task${openTasks.length === 1 ? "" : "s"} to complete`}
+              : `${filteredOpenTasks.length} task${filteredOpenTasks.length === 1 ? "" : "s"} to complete`}
           </p>
         </div>
 
-        {openTasks.length === 0 ? (
+        {filteredOpenTasks.length === 0 ? (
           <EmptyState
             icon={
               <svg
@@ -132,7 +166,7 @@ export function TasksClient({ openTasks, completedTasks }: TasksClientProps) {
           />
         ) : (
           <ul className="divide-y divide-white/[0.06]">
-            {openTasks.map((task) => {
+            {filteredOpenTasks.map((task) => {
               const due = getDueDateInfo(task.due_date);
 
               return (
@@ -248,6 +282,13 @@ export function TasksClient({ openTasks, completedTasks }: TasksClientProps) {
           </ul>
         </section>
       )}
+
+      <QuickTaskModal
+        open={showNewTaskModal}
+        customers={customers}
+        employees={employees}
+        onClose={() => setShowNewTaskModal(false)}
+      />
     </>
   );
 }

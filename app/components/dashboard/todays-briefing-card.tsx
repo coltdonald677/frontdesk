@@ -14,9 +14,15 @@ function BriefingLine({
     return (
       <Link
         href={bullet.href}
-        className="text-zinc-200 transition-colors hover:text-white"
+        className="group/link inline-flex items-center gap-1.5 text-zinc-200 transition-colors hover:text-white"
       >
-        {bullet.text}
+        <span>{bullet.text}</span>
+        <span
+          className="text-[10px] text-indigo-400 opacity-0 transition-opacity group-hover/link:opacity-100"
+          aria-hidden
+        >
+          →
+        </span>
       </Link>
     );
   }
@@ -109,22 +115,38 @@ export function TodaysBriefingCard({ briefing }: TodaysBriefingCardProps) {
         </div>
 
         {briefing.highestPriority && (
-          <div className="rounded-lg border border-white/[0.06] bg-zinc-950/40 px-4 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-300">
-              Highest priority
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-white sm:text-base">
-              {briefing.highestPriority.href ? (
-                <Link
-                  href={briefing.highestPriority.href}
-                  className="transition-colors hover:text-indigo-200"
-                >
-                  {briefing.highestPriority.text}
-                </Link>
-              ) : (
-                briefing.highestPriority.text
-              )}
-            </p>
+          <div
+            className={`rounded-lg border bg-zinc-950/40 px-4 py-4 transition-colors ${
+              briefing.highestPriority.href
+                ? "border-white/[0.06] hover:border-indigo-500/25 hover:bg-zinc-950/60"
+                : "border-white/[0.06]"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-300">
+                  Highest priority
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-white sm:text-base">
+                  {briefing.highestPriority.href ? (
+                    <Link
+                      href={briefing.highestPriority.href}
+                      className="group/priority inline-flex items-center gap-2 transition-colors hover:text-indigo-200"
+                    >
+                      <span>{briefing.highestPriority.text}</span>
+                      <span
+                        className="text-xs text-indigo-400 opacity-0 transition-opacity group-hover/priority:opacity-100"
+                        aria-hidden
+                      >
+                        View →
+                      </span>
+                    </Link>
+                  ) : (
+                    briefing.highestPriority.text
+                  )}
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>

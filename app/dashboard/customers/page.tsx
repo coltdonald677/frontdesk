@@ -1,7 +1,8 @@
 import { DashboardShell } from "@/app/components/dashboard/dashboard-shell";
 import { CustomersClient } from "@/app/components/customers/customers-client";
 import { getBusinessProfile } from "@/lib/business-profile";
-import { getCustomers } from "@/lib/customers";
+import { parseCustomerFilter } from "@/lib/dashboard/links";
+import { getCustomers, getInactiveCustomers } from "@/lib/customers";
 import { createClient } from "@/lib/supabase/server";
 
 function getUserDisplay(user: {
@@ -17,14 +18,33 @@ function getUserDisplay(user: {
   return { displayName, initials };
 }
 
-export default async function CustomersPage() {
+type CustomersPageProps = {
+  searchParams: Promise<{ filter?: string; new?: string }>;
+};
+
+export default async function CustomersPage({
+  searchParams,
+}: CustomersPageProps) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const profile = await getBusinessProfile();
-  const customers = await getCustomers(profile!.id);
+  const params = await searchParams;
+  const initialFilter = parseCustomerFilter(params.filter);
+  const openNewCustomer = params.new === "customer";
+
+  const [customers, inactiveCustomers] = await Promise.all([
+    getCustomers(profile!.id),
+    initialFilter === "inactive"
+      ? getInactiveCustomers(profile!.id)
+      : Promise.resolve([]),
+  ]);
+  const inactiveCustomerIds =
+    initialFilter === "inactive"
+      ? inactiveCustomers.map((customer) => customer.id)
+      : undefined;
   const { displayName, initials } = getUserDisplay(user!);
 
   return (
@@ -39,7 +59,12 @@ export default async function CustomersPage() {
           </p>
         </div>
 
-        <CustomersClient customers={customers} />
+        <CustomersClient
+          customers={customers}
+          initialFilter={initialFilter}
+          inactiveCustomerIds={inactiveCustomerIds}
+          openNewCustomer={openNewCustomer}
+        />
       </div>
     </DashboardShell>
   );

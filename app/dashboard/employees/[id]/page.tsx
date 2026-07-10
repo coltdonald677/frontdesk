@@ -7,6 +7,7 @@ import {
   getEmployeeAppointments,
   getEmployeeRecentActivity,
   getEmployeeTasks,
+  getEmployeeTodayAppointments,
   getEmployeeUpcomingAppointments,
   getEmployeeWorkspaceStats,
 } from "@/lib/employees";
@@ -45,14 +46,21 @@ export default async function EmployeeDetailPage({
     notFound();
   }
 
-  const [stats, appointments, upcomingAppointments, tasks, recentActivity] =
-    await Promise.all([
-      getEmployeeWorkspaceStats(id),
-      getEmployeeAppointments(id),
-      getEmployeeUpcomingAppointments(id),
-      getEmployeeTasks(id),
-      getEmployeeRecentActivity(id),
-    ]);
+  const [
+    stats,
+    todayAppointments,
+    appointments,
+    upcomingAppointments,
+    tasks,
+    recentActivity,
+  ] = await Promise.all([
+    getEmployeeWorkspaceStats(id),
+    getEmployeeTodayAppointments(id),
+    getEmployeeAppointments(id),
+    getEmployeeUpcomingAppointments(id),
+    getEmployeeTasks(id),
+    getEmployeeRecentActivity(id),
+  ]);
 
   const { displayName, initials } = getUserDisplay(user!);
 
@@ -62,6 +70,7 @@ export default async function EmployeeDetailPage({
         <EmployeeWorkspaceClient
           employee={employee}
           stats={stats}
+          todayAppointments={todayAppointments}
           appointments={appointments}
           upcomingAppointments={upcomingAppointments}
           tasks={tasks}
