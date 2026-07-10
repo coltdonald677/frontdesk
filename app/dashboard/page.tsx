@@ -6,6 +6,12 @@ import { getCustomers } from "@/lib/customers";
 import { getMissionControlStats } from "@/lib/dashboard";
 import { getEmployees } from "@/lib/employees";
 import { getBusinessInsights } from "@/lib/insights/business-engine";
+import { getPlutoRecommendations } from "@/lib/recommendations";
+import {
+  getUnreadAutomationNotifications,
+  loadAutomationSettingsStore,
+  scanOverdueTaskAutomations,
+} from "@/lib/automation";
 import { createClient } from "@/lib/supabase/server";
 
 function getUserDisplay(user: {
@@ -30,14 +36,22 @@ export default async function DashboardPage() {
   const profile = await getBusinessProfile();
   const { displayName, initials } = getUserDisplay(user!);
 
-  const [stats, briefing, customers, employees, businessInsights] =
+  await scanOverdueTaskAutomations(profile!.id);
+
+  const [stats, briefing, customers, employees, businessInsights, plutoRecommendations, automationStore] =
     await Promise.all([
     getMissionControlStats(profile!.id),
     getDailyBriefing(profile!.id, displayName),
     getCustomers(profile!.id),
     getEmployees(profile!.id),
     getBusinessInsights(profile!.id),
+    getPlutoRecommendations(profile!.id),
+    loadAutomationSettingsStore(profile!.id),
   ]);
+
+  const automationNotifications = getUnreadAutomationNotifications(
+    automationStore,
+  );
 
   return (
     <DashboardShell displayName={displayName} initials={initials}>
@@ -47,6 +61,8 @@ export default async function DashboardPage() {
         customers={customers}
         employees={employees}
         businessInsights={businessInsights}
+        plutoRecommendations={plutoRecommendations}
+        automationNotifications={automationNotifications}
       />
     </DashboardShell>
   );

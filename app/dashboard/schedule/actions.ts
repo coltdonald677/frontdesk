@@ -18,6 +18,7 @@ import {
   isValidIsoDate,
   isValidTimeRange,
 } from "@/lib/appointments/datetime";
+import { dispatchAutomationEvent } from "@/lib/automation";
 import { createClient } from "@/lib/supabase/server";
 import { verifyEmployeeOwnership } from "@/app/dashboard/employees/actions";
 
@@ -117,21 +118,37 @@ async function verifyCustomerOwnership(
   return Boolean(customer);
 }
 
-async function createAppointmentActivity(
+async function loadAppointmentPayload(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  customerId: string,
+  appointmentId: string,
   businessProfileId: string,
 ) {
-  const { error } = await supabase.from("customer_activities").insert({
-    customer_id: customerId,
-    business_profile_id: businessProfileId,
-    activity_type: "meeting",
-    content: "Appointment scheduled.",
-  });
+  const { data } = await supabase
+    .from("appointments")
+    .select(
+      "id, customer_id, employee_id, title, appointment_date, status, customers(name, company), employees(full_name)",
+    )
+    .eq("id", appointmentId)
+    .eq("business_profile_id", businessProfileId)
+    .maybeSingle();
 
-  if (error) {
-    throw new Error(error.message);
+  if (!data) {
+    return null;
   }
+
+  const customer = Array.isArray(data.customers) ? data.customers[0] : data.customers;
+  const employee = Array.isArray(data.employees) ? data.employees[0] : data.employees;
+
+  return {
+    appointmentId: data.id,
+    customerId: data.customer_id,
+    customerName: customer?.company || customer?.name,
+    employeeId: data.employee_id,
+    employeeName: employee?.full_name ?? null,
+    title: data.title,
+    appointmentDate: data.appointment_date,
+    previousStatus: data.status,
+  };
 }
 
 function revalidateSchedulePaths(customerId?: string, employeeId?: string | null) {
@@ -181,34 +198,45 @@ export async function createAppointment(
     }
   }
 
-  const { error } = await supabase.from("appointments").insert({
-    business_profile_id: profile.id,
-    customer_id: appointment.customer_id,
-    employee_id: appointment.employee_id,
-    title: appointment.title,
-    notes: appointment.notes,
-    appointment_date: appointment.appointment_date,
-    start_time: appointment.start_time,
-    end_time: appointment.end_time,
-    status: appointment.status,
-  });
+  const { data: created, error } = await supabase
+    .from("appointments")
+    .insert({
+      business_profile_id: profile.id,
+      customer_id: appointment.customer_id,
+      employee_id: appointment.employee_id,
+      title: appointment.title,
+      notes: appointment.notes,
+      appointment_date: appointment.appointment_date,
+      start_time: appointment.start_time,
+      end_time: appointment.end_time,
+      status: appointment.status,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     return { error: error.message };
   }
 
   try {
-    await createAppointmentActivity(
+    const payload = await loadAppointmentPayload(
       supabase,
-      appointment.customer_id,
+      created.id,
       profile.id,
     );
-  } catch (activityError) {
+
+    if (payload) {
+      await dispatchAutomationEvent(profile.id, {
+        type: "appointment.created",
+        payload,
+      });
+    }
+  } catch (automationError) {
     return {
       error:
-        activityError instanceof Error
-          ? activityError.message
-          : "Appointment saved but activity could not be logged.",
+        automationError instanceof Error
+          ? automationError.message
+          : "Appointment saved but automation could not run.",
     };
   }
 
@@ -235,7 +263,7 @@ export async function updateAppointment(
 
   const { data: existing } = await supabase
     .from("appointments")
-    .select("id")
+    .select("id, customer_id, employee_id, title, appointment_date, status")
     .eq("id", id)
     .eq("business_profile_id", profile.id)
     .maybeSingle();
@@ -283,6 +311,46 @@ export async function updateAppointment(
 
   if (error) {
     return { error: error.message };
+  }
+
+  try {
+    const payload = await loadAppointmentPayload(supabase, id, profile.id);
+
+    if (payload) {
+      if (
+        existing.status !== "completed" &&
+        appointment.status === "completed"
+      ) {
+        await dispatchAutomationEvent(profile.id, {
+          type: "appointment.completed",
+          payload: {
+            ...payload,
+            previousStatus: existing.status,
+          },
+        });
+      }
+
+      if (
+        existing.employee_id !== appointment.employee_id &&
+        appointment.employee_id
+      ) {
+        await dispatchAutomationEvent(profile.id, {
+          type: "appointment.employee_assigned",
+          payload: {
+            ...payload,
+            employeeId: appointment.employee_id,
+            previousEmployeeId: existing.employee_id,
+          },
+        });
+      }
+    }
+  } catch (automationError) {
+    return {
+      error:
+        automationError instanceof Error
+          ? automationError.message
+          : "Appointment updated but automation could not run.",
+    };
   }
 
   revalidateSchedulePaths(appointment.customer_id, appointment.employee_id);

@@ -9,6 +9,7 @@ import {
   type CustomerActivity,
   type CustomerActivityType,
 } from "@/lib/customer-activities";
+import { dispatchAutomationEvent } from "@/lib/automation";
 import { createClient } from "@/lib/supabase/server";
 
 export type CustomerActionState = {
@@ -75,16 +76,37 @@ export async function createCustomer(
     return { error: "Name is required." };
   }
 
-  const { error } = await supabase.from("customers").insert({
-    business_profile_id: profile.id,
-    ...customer,
-  });
+  const { data: created, error } = await supabase
+    .from("customers")
+    .insert({
+      business_profile_id: profile.id,
+      ...customer,
+    })
+    .select("id, name")
+    .single();
 
   if (error) {
     return { error: error.message };
   }
 
-  revalidateCustomerPaths();
+  try {
+    await dispatchAutomationEvent(profile.id, {
+      type: "customer.created",
+      payload: {
+        customerId: created.id,
+        customerName: created.name,
+      },
+    });
+  } catch (automationError) {
+    return {
+      error:
+        automationError instanceof Error
+          ? automationError.message
+          : "Customer saved but automation could not run.",
+    };
+  }
+
+  revalidateCustomerPaths(created.id);
   return { success: true };
 }
 

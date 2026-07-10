@@ -1,3 +1,5 @@
+import { AutomationNotificationsBanner } from "@/app/components/dashboard/automation-notifications-banner";
+import { PlutoRecommendationsPanel } from "@/app/components/dashboard/pluto-recommendations-panel";
 import { BusinessInsightsPanel } from "@/app/components/dashboard/business-insights-panel";
 import { TodaysBriefingCard } from "@/app/components/dashboard/todays-briefing-card";
 import {
@@ -18,6 +20,8 @@ import {
 import type { Customer } from "@/lib/customers/types";
 import type { Employee } from "@/lib/employees/types";
 import type { BusinessInsight } from "@/lib/insights/business-types";
+import type { PlutoRecommendation } from "@/lib/recommendations";
+import type { AutomationNotification } from "@/lib/automation";
 
 type MissionControlDashboardProps = {
   stats: MissionControlStats;
@@ -25,6 +29,8 @@ type MissionControlDashboardProps = {
   customers: Customer[];
   employees: Employee[];
   businessInsights: BusinessInsight[];
+  plutoRecommendations: PlutoRecommendation[];
+  automationNotifications: AutomationNotification[];
 };
 
 function formatDate() {
@@ -64,6 +70,8 @@ export function MissionControlDashboard({
   customers,
   employees,
   businessInsights,
+  plutoRecommendations,
+  automationNotifications,
 }: MissionControlDashboardProps) {
   const today = getTodayIsoDate();
   const scheduleTodayHref = scheduleLink({ date: today });
@@ -83,6 +91,10 @@ export function MissionControlDashboard({
       </div>
 
       <TodaysBriefingCard briefing={briefing} />
+
+      <AutomationNotificationsBanner notifications={automationNotifications} />
+
+      <PlutoRecommendationsPanel recommendations={plutoRecommendations} />
 
       <BusinessInsightsPanel insights={businessInsights} />
 
