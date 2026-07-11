@@ -24,6 +24,7 @@ import {
 } from "@/lib/appointments/datetime";
 import type { Customer } from "@/lib/customers/types";
 import type { Employee } from "@/lib/employees/types";
+import type { BusinessHoursSettings } from "@/lib/business-settings/types";
 import {
   panelFormClass,
   panelHeaderClass,
@@ -42,12 +43,14 @@ type CustomerAppointmentsPanelProps = {
   customer: Customer;
   variant?: "embedded" | "workspace";
   includeAll?: boolean;
+  businessHours?: BusinessHoursSettings;
 };
 
 export function CustomerAppointmentsPanel({
   customer,
   variant = "embedded",
   includeAll = false,
+  businessHours,
 }: CustomerAppointmentsPanelProps) {
   const router = useRouter();
   const isWorkspace = variant === "workspace";
@@ -357,6 +360,7 @@ export function CustomerAppointmentsPanel({
           }}
           customers={[customer]}
           employees={employees}
+          businessHours={businessHours}
           defaultCustomerId={customer.id}
           onClose={() => {
             setSelectedAppointment(null);

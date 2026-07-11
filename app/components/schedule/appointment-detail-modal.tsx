@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   createAppointment,
@@ -17,9 +18,14 @@ import {
 import {
   formatDisplayDate,
   formatTimeRange,
+  getTodayIsoDate,
 } from "@/lib/appointments/datetime";
 import type { Customer } from "@/lib/customers/types";
 import type { Employee } from "@/lib/employees/types";
+import type { BusinessHoursSettings } from "@/lib/business-settings/types";
+import { getAppointmentBusinessHoursWarning } from "@/lib/business-settings/business-hours-check";
+import { defaultBusinessHours } from "@/lib/business-settings/defaults";
+import { invoicesLink } from "@/lib/dashboard/links";
 import { EmployeeSelect } from "@/app/components/employees/employee-select";
 
 const inputClassName =
@@ -30,6 +36,7 @@ const labelClassName = "mb-1.5 block text-sm font-medium text-zinc-300";
 type AppointmentDetailModalProps = {
   customers: Customer[];
   employees: Employee[];
+  businessHours?: BusinessHoursSettings;
   onClose: () => void;
   appointment?: AppointmentWithCustomer;
   defaultDate?: string;
@@ -59,6 +66,7 @@ function SubmitButton({ isEditing }: { isEditing: boolean }) {
 export function AppointmentDetailModal({
   customers,
   employees,
+  businessHours = defaultBusinessHours(),
   onClose,
   appointment,
   defaultDate,
@@ -73,6 +81,27 @@ export function AppointmentDetailModal({
   >(isEditing ? updateAppointment : createAppointment, {});
   const handledSuccess = useRef(false);
 
+  const [appointmentDate, setAppointmentDate] = useState(
+    appointment?.appointment_date ?? defaultDate ?? getTodayIsoDate(),
+  );
+  const [startTime, setStartTime] = useState(
+    appointment?.start_time.slice(0, 5) ?? "09:00",
+  );
+  const [endTime, setEndTime] = useState(
+    appointment?.end_time.slice(0, 5) ?? "10:00",
+  );
+
+  const hoursWarning = useMemo(
+    () =>
+      getAppointmentBusinessHoursWarning(
+        businessHours,
+        appointmentDate,
+        startTime,
+        endTime,
+      ),
+    [appointmentDate, businessHours, endTime, startTime],
+  );
+
   useEffect(() => {
     if (state.success && !handledSuccess.current) {
       handledSuccess.current = true;
@@ -84,9 +113,6 @@ export function AppointmentDetailModal({
       handledSuccess.current = false;
     }
   }, [state.success, onClose, router]);
-
-  const startTime = appointment?.start_time.slice(0, 5) ?? "09:00";
-  const endTime = appointment?.end_time.slice(0, 5) ?? "10:00";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -202,7 +228,8 @@ export function AppointmentDetailModal({
               name="appointment_date"
               type="date"
               required
-              defaultValue={appointment?.appointment_date ?? defaultDate ?? ""}
+              value={appointmentDate}
+              onChange={(event) => setAppointmentDate(event.target.value)}
               className={`${inputClassName} cursor-pointer`}
             />
           </div>
@@ -217,7 +244,8 @@ export function AppointmentDetailModal({
                 name="start_time"
                 type="time"
                 required
-                defaultValue={startTime}
+                value={startTime}
+                onChange={(event) => setStartTime(event.target.value)}
                 className={`${inputClassName} cursor-pointer`}
               />
             </div>
@@ -231,11 +259,18 @@ export function AppointmentDetailModal({
                 name="end_time"
                 type="time"
                 required
-                defaultValue={endTime}
+                value={endTime}
+                onChange={(event) => setEndTime(event.target.value)}
                 className={`${inputClassName} cursor-pointer`}
               />
             </div>
           </div>
+
+          {hoursWarning && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              {hoursWarning}
+            </div>
+          )}
 
           <div>
             <label htmlFor="appointment_status" className={labelClassName}>
@@ -271,6 +306,14 @@ export function AppointmentDetailModal({
                 <p className="mt-2 text-sm text-zinc-400">
                   {appointment.customers.name}
                 </p>
+              )}
+              {appointment.status === "completed" && (
+                <Link
+                  href={invoicesLink({ appointmentId: appointment.id })}
+                  className="mt-3 inline-flex items-center rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-200 transition-colors hover:border-indigo-500/50"
+                >
+                  Create invoice
+                </Link>
               )}
             </div>
           )}

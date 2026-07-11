@@ -4,7 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const settingsLinks = [
+  { label: "Business Profile", href: "/dashboard/settings/profile" },
+  { label: "Hours", href: "/dashboard/settings/hours" },
+  { label: "Scheduling", href: "/dashboard/settings/scheduling" },
+  { label: "Employees", href: "/dashboard/settings/employees" },
+  { label: "Invoices", href: "/dashboard/settings/invoices" },
+  { label: "Notifications", href: "/dashboard/settings/notifications" },
   { label: "Automations", href: "/dashboard/settings/automations" },
+  { label: "Automation Prefs", href: "/dashboard/settings/automations-preferences" },
+  { label: "Pluto Rules", href: "/dashboard/settings/rules" },
+  { label: "AI Preferences", href: "/dashboard/settings/ai" },
 ];
 
 export function SettingsNav() {

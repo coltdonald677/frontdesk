@@ -17,6 +17,7 @@ import {
   isValidIsoDate,
 } from "@/lib/appointments/datetime";
 import { getBusinessProfile } from "@/lib/business-profile";
+import { getBusinessHoursForBusiness } from "@/lib/business-settings";
 import { getCustomers } from "@/lib/customers";
 import { getEmployees } from "@/lib/employees";
 import { createClient } from "@/lib/supabase/server";
@@ -76,12 +77,13 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         ? [getWeekStart(safeSelectedDate), getWeekEnd(safeSelectedDate)]
         : [safeSelectedDate, safeSelectedDate];
 
-  const [appointments, customers, employees] = await Promise.all([
+  const [appointments, customers, employees, businessHours] = await Promise.all([
     view === "day"
       ? getAppointmentsByDate(profile!.id, safeSelectedDate)
       : getAppointmentsByDateRange(profile!.id, rangeStart, rangeEnd),
     getCustomers(profile!.id),
     getEmployees(profile!.id),
+    getBusinessHoursForBusiness(profile!.id),
   ]);
 
   const { displayName, initials } = getUserDisplay(user!);
@@ -105,6 +107,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           appointments={appointments}
           customers={customers}
           employees={employees}
+          businessHours={businessHours}
           selectedDate={safeSelectedDate}
           view={view}
           initialFilter={initialFilter}

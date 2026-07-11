@@ -8,11 +8,13 @@ import { AppointmentDetailModal } from "@/app/components/schedule/appointment-de
 import { getTodayIsoDate } from "@/lib/appointments/datetime";
 import type { Customer } from "@/lib/customers/types";
 import type { Employee } from "@/lib/employees/types";
+import type { BusinessHoursSettings } from "@/lib/business-settings/types";
 import { QuickTaskModal } from "./quick-task-modal";
 
 type QuickActionsProps = {
   customers: Customer[];
   employees: Employee[];
+  businessHours: BusinessHoursSettings;
 };
 
 type QuickActionId = "customer" | "appointment" | "task" | "employee";
@@ -65,7 +67,7 @@ const QUICK_ACTIONS: {
   },
 ];
 
-export function QuickActions({ customers, employees }: QuickActionsProps) {
+export function QuickActions({ customers, employees, businessHours }: QuickActionsProps) {
   const router = useRouter();
   const [activeAction, setActiveAction] = useState<QuickActionId | null>(null);
 
@@ -112,6 +114,7 @@ export function QuickActions({ customers, employees }: QuickActionsProps) {
         <AppointmentDetailModal
           customers={customers}
           employees={employees}
+          businessHours={businessHours}
           defaultDate={getTodayIsoDate()}
           onClose={close}
         />

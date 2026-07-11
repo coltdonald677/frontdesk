@@ -584,7 +584,7 @@ function AttachmentForm({
   }, [state.success, onSuccess]);
 
   return (
-    <form action={formAction} encType="multipart/form-data">
+    <form action={formAction}>
       <FormShell
         title="Upload attachment"
         onCancel={onCancel}

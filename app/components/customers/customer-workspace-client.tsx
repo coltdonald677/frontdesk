@@ -9,6 +9,8 @@ import type { Customer } from "@/lib/customers/types";
 import type { CustomerTimelineEvent } from "@/lib/customers/timeline";
 import type { CustomerCommunicationsHub } from "@/lib/communications/types";
 import type { Employee } from "@/lib/employees/types";
+import type { BusinessHoursSettings } from "@/lib/business-settings/types";
+import type { CustomerInvoiceSummary, InvoiceWithCustomer } from "@/lib/invoices";
 import type { CustomerStatus } from "@/lib/customers/status";
 import {
   ACTIVITY_TYPE_LABELS,
@@ -20,6 +22,7 @@ import { CustomerCommunicationsPanel } from "./customer-communications-panel";
 import { CustomerFormModal } from "./customer-form-modal";
 import { CustomerStatusBadge } from "./customer-status-badge";
 import { CustomerTasksPanel } from "./customer-tasks-panel";
+import { CustomerInvoicesPanel } from "@/app/components/invoices/customer-invoices-panel";
 import { CustomerTimelinePanel } from "./customer-timeline-panel";
 
 const TABS = [
@@ -28,6 +31,7 @@ const TABS = [
   { id: "communications", label: "Communications" },
   { id: "appointments", label: "Appointments" },
   { id: "tasks", label: "Tasks" },
+  { id: "invoices", label: "Invoices" },
   { id: "activity", label: "Activity" },
 ] as const;
 
@@ -84,7 +88,10 @@ type CustomerWorkspaceClientProps = {
   communicationsHub: CustomerCommunicationsHub;
   employees: Employee[];
   customers: Customer[];
+  businessHours: BusinessHoursSettings;
   initialTab?: TabId;
+  customerInvoices?: InvoiceWithCustomer[];
+  invoiceSummary?: CustomerInvoiceSummary;
 };
 
 function StatCard({
@@ -111,7 +118,16 @@ export function CustomerWorkspaceClient({
   communicationsHub,
   employees,
   customers,
+  businessHours,
   initialTab = "overview",
+  customerInvoices = [],
+  invoiceSummary = {
+    totalInvoiced: 0,
+    outstandingBalance: 0,
+    overdueBalance: 0,
+    paidTotal: 0,
+    invoiceCount: 0,
+  },
 }: CustomerWorkspaceClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
@@ -335,6 +351,7 @@ export function CustomerWorkspaceClient({
             events={timelineEvents}
             employees={employees}
             customers={customers}
+            businessHours={businessHours}
           />
         )}
 
@@ -352,11 +369,22 @@ export function CustomerWorkspaceClient({
             customer={customer}
             variant="workspace"
             includeAll
+            businessHours={businessHours}
           />
         )}
 
         {activeTab === "tasks" && (
           <CustomerTasksPanel customerId={customer.id} variant="workspace" />
+        )}
+
+        {activeTab === "invoices" && (
+          <div className="p-5 sm:p-6">
+            <CustomerInvoicesPanel
+              customerId={customer.id}
+              invoices={customerInvoices}
+              summary={invoiceSummary}
+            />
+          </div>
         )}
 
         {activeTab === "activity" && (

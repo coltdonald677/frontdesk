@@ -30,6 +30,19 @@ export type RecommendationContext = BusinessInsightContext & {
   unassignedTaskCount: number;
   emptyDaysThisWeek: string[];
   repeatCustomersThisMonth: CustomerAppointmentSummary[];
+  completedAppointmentsWithoutInvoice: Array<{
+    id: string;
+    title: string;
+    customer_id: string;
+    appointment_date: string;
+    customer_name: string;
+  }>;
+  overdueInvoices: Array<{
+    id: string;
+    invoice_number: string;
+    customer_name: string;
+    balance_due: number;
+  }>;
 };
 
 export type RecommendationRule = (

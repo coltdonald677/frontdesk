@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { getTodayIsoDate } from "@/lib/tasks/due-date";
+import {
+  notifyAutomationFailed,
+  notifyAutomationSuccess,
+  notifyTaskOverdue,
+} from "@/lib/notifications";
 import { AUTOMATION_HANDLERS } from "./handlers";
 import { getAutomationDefinition, TRIGGER_TO_AUTOMATION } from "./registry";
 import {
@@ -9,6 +14,7 @@ import {
   saveAutomationSettingsStore,
   setAutomationState,
 } from "./store";
+import { getAutomationPreferencesForBusiness, isAutomationPreferenceEnabled } from "@/lib/business-settings/automation-preferences";
 import type {
   AutomationEvent,
   AutomationId,
@@ -31,12 +37,36 @@ async function persistRunResult(
   });
 
   await saveAutomationSettingsStore(businessProfileId, nextStore);
+
+  if (result.status === "success") {
+    await notifyAutomationSuccess(businessProfileId, automationId, result.message);
+  } else if (result.status === "error") {
+    await notifyAutomationFailed(businessProfileId, automationId, result.message);
+  }
+
   return nextStore;
 }
 
 export async function runAutomation(
   runtime: AutomationRuntime,
 ): Promise<AutomationRunResult> {
+  const preferences = await getAutomationPreferencesForBusiness(runtime.businessProfileId);
+  if (!preferences.globalEnabled && !runtime.manual) {
+    return {
+      status: "skipped",
+      message: "Automations are disabled in Settings.",
+      actions: [],
+    };
+  }
+
+  if (!runtime.manual && !isAutomationPreferenceEnabled(preferences, runtime.automationId)) {
+    return {
+      status: "skipped",
+      message: "This automation workflow is disabled in Settings.",
+      actions: [],
+    };
+  }
+
   const store = ensureDefaultAutomationStates(
     await loadAutomationSettingsStore(runtime.businessProfileId),
   );
@@ -168,11 +198,6 @@ export async function scanOverdueTaskAutomations(
     await loadAutomationSettingsStore(businessProfileId),
   );
   const state = getAutomationState(store, "overdue_task");
-
-  if (!state.enabled) {
-    return;
-  }
-
   const processed = new Set(store.processedOverdueTaskIds ?? []);
 
   const { data: overdueTasks, error } = await supabase
@@ -190,24 +215,32 @@ export async function scanOverdueTaskAutomations(
   }
 
   for (const task of overdueTasks ?? []) {
+    await notifyTaskOverdue(businessProfileId, {
+      taskId: task.id,
+      taskTitle: task.title,
+      dueDate: task.due_date!,
+    });
+
     if (processed.has(task.id)) {
       continue;
     }
 
-    const customerRow = Array.isArray(task.customers)
-      ? task.customers[0]
-      : task.customers;
+    if (state.enabled) {
+      const customerRow = Array.isArray(task.customers)
+        ? task.customers[0]
+        : task.customers;
 
-    await dispatchAutomationEvent(businessProfileId, {
-      type: "task.overdue",
-      payload: {
-        taskId: task.id,
-        taskTitle: task.title,
-        customerId: task.customer_id,
-        customerName: customerRow?.name ?? null,
-        dueDate: task.due_date!,
-      },
-    });
+      await dispatchAutomationEvent(businessProfileId, {
+        type: "task.overdue",
+        payload: {
+          taskId: task.id,
+          taskTitle: task.title,
+          customerId: task.customer_id,
+          customerName: customerRow?.name ?? null,
+          dueDate: task.due_date!,
+        },
+      });
+    }
   }
 }
 

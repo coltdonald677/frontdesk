@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DashboardSection } from "@/app/components/dashboard/dashboard-stat-card";
+import { ProposeActionButton } from "@/app/components/actions/propose-action-button";
 import type {
   PlutoRecommendation,
   RecommendationCategory,
@@ -35,6 +36,22 @@ const SEVERITY_STYLES: Record<
     badgeLabel: "Positive",
   },
 };
+
+const PROPOSEABLE_PATTERNS = [
+  "pluto-unassigned-appointment",
+  "pluto-unassigned-appointments",
+  "pluto-inactive-customer",
+  "pluto-overdue-tasks",
+  "pluto-empty-schedule-days",
+  "pluto-heavy-workload",
+  "pluto-overlap-",
+  "pluto-completed-appointment-",
+  "pluto-overdue-invoice-",
+];
+
+function canProposeAction(recommendationId: string): boolean {
+  return PROPOSEABLE_PATTERNS.some((pattern) => recommendationId.startsWith(pattern));
+}
 
 function CategoryIcon({ category }: { category: RecommendationCategory }) {
   const className = "h-4 w-4";
@@ -85,6 +102,7 @@ function RecommendationCard({
   recommendation: PlutoRecommendation;
 }) {
   const styles = SEVERITY_STYLES[recommendation.severity];
+  const showPropose = canProposeAction(recommendation.id);
 
   return (
     <article
@@ -114,13 +132,14 @@ function RecommendationCard({
         </div>
       </div>
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
         <Link
           href={recommendation.actionHref}
           className="inline-flex items-center rounded-lg border border-white/[0.08] bg-zinc-800/60 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-white"
         >
           {recommendation.actionLabel}
         </Link>
+        {showPropose && <ProposeActionButton recommendationId={recommendation.id} />}
       </div>
     </article>
   );

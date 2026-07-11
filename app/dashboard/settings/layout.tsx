@@ -37,7 +37,8 @@ export default async function SettingsLayout({
             Settings
           </h1>
           <p className="mt-2 text-zinc-400">
-            Configure Pluto automations for {profile?.business_name ?? "your business"}.
+            Configure your business profile, operating rules, and how Pluto works for{" "}
+            {profile?.business_name ?? "your business"}.
           </p>
         </div>
 

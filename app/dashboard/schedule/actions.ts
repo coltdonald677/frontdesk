@@ -19,6 +19,12 @@ import {
   isValidTimeRange,
 } from "@/lib/appointments/datetime";
 import { dispatchAutomationEvent } from "@/lib/automation";
+import {
+  notifyAppointmentCompleted,
+  notifyAppointmentCreated,
+  notifyAppointmentUnassigned,
+  notifyEmployeeAssigned,
+} from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 import { verifyEmployeeOwnership } from "@/app/dashboard/employees/actions";
 
@@ -156,6 +162,7 @@ function revalidateSchedulePaths(customerId?: string, employeeId?: string | null
   revalidatePath("/dashboard/customers");
   revalidatePath("/dashboard/employees");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/notifications");
   if (customerId) {
     revalidatePath(`/dashboard/customers/${customerId}`);
   }
@@ -226,6 +233,8 @@ export async function createAppointment(
     );
 
     if (payload) {
+      await notifyAppointmentCreated(profile.id, payload);
+
       await dispatchAutomationEvent(profile.id, {
         type: "appointment.created",
         payload,
@@ -321,6 +330,8 @@ export async function updateAppointment(
         existing.status !== "completed" &&
         appointment.status === "completed"
       ) {
+        await notifyAppointmentCompleted(profile.id, payload);
+
         await dispatchAutomationEvent(profile.id, {
           type: "appointment.completed",
           payload: {
@@ -334,6 +345,11 @@ export async function updateAppointment(
         existing.employee_id !== appointment.employee_id &&
         appointment.employee_id
       ) {
+        await notifyEmployeeAssigned(profile.id, {
+          ...payload,
+          employeeId: appointment.employee_id,
+        });
+
         await dispatchAutomationEvent(profile.id, {
           type: "appointment.employee_assigned",
           payload: {
@@ -342,6 +358,11 @@ export async function updateAppointment(
             previousEmployeeId: existing.employee_id,
           },
         });
+      } else if (
+        existing.employee_id !== appointment.employee_id &&
+        !appointment.employee_id
+      ) {
+        await notifyAppointmentUnassigned(profile.id, payload);
       }
     }
   } catch (automationError) {

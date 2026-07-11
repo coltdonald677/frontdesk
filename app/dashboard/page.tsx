@@ -1,17 +1,19 @@
 import { DashboardShell } from "@/app/components/dashboard/dashboard-shell";
 import { MissionControlDashboard } from "@/app/components/dashboard/mission-control-dashboard";
+import { getBrainStatusForBusiness } from "@/lib/brain";
 import { getDailyBriefing } from "@/lib/briefing";
 import { getBusinessProfile } from "@/lib/business-profile";
+import { getBusinessHoursForBusiness } from "@/lib/business-settings";
 import { getCustomers } from "@/lib/customers";
 import { getMissionControlStats } from "@/lib/dashboard";
 import { getEmployees } from "@/lib/employees";
 import { getBusinessInsights } from "@/lib/insights/business-engine";
 import { getPlutoRecommendations } from "@/lib/recommendations";
-import {
-  getUnreadAutomationNotifications,
-  loadAutomationSettingsStore,
-  scanOverdueTaskAutomations,
-} from "@/lib/automation";
+import { getProposedActionCount } from "@/lib/actions";
+import { getInvoiceMetrics, syncOverdueInvoices } from "@/lib/invoices";
+import { scanOverdueTaskAutomations } from "@/lib/automation";
+import { syncCriticalRecommendationNotifications } from "@/lib/notifications";
+import { syncOverdueInvoiceNotificationsAction } from "@/app/dashboard/invoices/actions";
 import { createClient } from "@/lib/supabase/server";
 
 function getUserDisplay(user: {
@@ -37,8 +39,9 @@ export default async function DashboardPage() {
   const { displayName, initials } = getUserDisplay(user!);
 
   await scanOverdueTaskAutomations(profile!.id);
+  await syncOverdueInvoices(profile!.id);
 
-  const [stats, briefing, customers, employees, businessInsights, plutoRecommendations, automationStore] =
+  const [stats, briefing, customers, employees, businessInsights, plutoRecommendations, proposedActionCount, invoiceMetrics, businessHours] =
     await Promise.all([
     getMissionControlStats(profile!.id),
     getDailyBriefing(profile!.id, displayName),
@@ -46,12 +49,19 @@ export default async function DashboardPage() {
     getEmployees(profile!.id),
     getBusinessInsights(profile!.id),
     getPlutoRecommendations(profile!.id),
-    loadAutomationSettingsStore(profile!.id),
+    getProposedActionCount(profile!.id),
+    getInvoiceMetrics(profile!.id),
+    getBusinessHoursForBusiness(profile!.id),
   ]);
 
-  const automationNotifications = getUnreadAutomationNotifications(
-    automationStore,
+  await syncCriticalRecommendationNotifications(
+    profile!.id,
+    plutoRecommendations,
   );
+
+  await syncOverdueInvoiceNotificationsAction();
+
+  const brainStatus = await getBrainStatusForBusiness(profile!.id);
 
   return (
     <DashboardShell displayName={displayName} initials={initials}>
@@ -60,9 +70,12 @@ export default async function DashboardPage() {
         briefing={briefing}
         customers={customers}
         employees={employees}
+        businessHours={businessHours}
         businessInsights={businessInsights}
         plutoRecommendations={plutoRecommendations}
-        automationNotifications={automationNotifications}
+        proposedActionCount={proposedActionCount}
+        invoiceMetrics={invoiceMetrics}
+        brainStatus={brainStatus}
       />
     </DashboardShell>
   );

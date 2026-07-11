@@ -1,4 +1,5 @@
-import { AutomationNotificationsBanner } from "@/app/components/dashboard/automation-notifications-banner";
+import Link from "next/link";
+import { PlutoBrainSection } from "@/app/components/brain/pluto-brain-section";
 import { PlutoRecommendationsPanel } from "@/app/components/dashboard/pluto-recommendations-panel";
 import { BusinessInsightsPanel } from "@/app/components/dashboard/business-insights-panel";
 import { TodaysBriefingCard } from "@/app/components/dashboard/todays-briefing-card";
@@ -14,23 +15,32 @@ import type { MissionControlStats } from "@/lib/dashboard";
 import {
   customersLink,
   employeesLink,
+  invoicesLink,
   scheduleLink,
   tasksLink,
 } from "@/lib/dashboard/links";
+import type { InvoiceMetrics } from "@/lib/invoices";
+import { formatCurrency } from "@/lib/invoices/types";
 import type { Customer } from "@/lib/customers/types";
 import type { Employee } from "@/lib/employees/types";
+import type { BusinessHoursSettings } from "@/lib/business-settings/types";
 import type { BusinessInsight } from "@/lib/insights/business-types";
 import type { PlutoRecommendation } from "@/lib/recommendations";
-import type { AutomationNotification } from "@/lib/automation";
 
 type MissionControlDashboardProps = {
   stats: MissionControlStats;
   briefing: DailyBriefing;
   customers: Customer[];
   employees: Employee[];
+  businessHours: BusinessHoursSettings;
   businessInsights: BusinessInsight[];
   plutoRecommendations: PlutoRecommendation[];
-  automationNotifications: AutomationNotification[];
+  proposedActionCount: number;
+  invoiceMetrics: InvoiceMetrics;
+  brainStatus: {
+    enabled: boolean;
+    realAiConfigured: boolean;
+  };
 };
 
 function formatDate() {
@@ -69,9 +79,12 @@ export function MissionControlDashboard({
   briefing,
   customers,
   employees,
+  businessHours,
   businessInsights,
   plutoRecommendations,
-  automationNotifications,
+  proposedActionCount,
+  invoiceMetrics,
+  brainStatus,
 }: MissionControlDashboardProps) {
   const today = getTodayIsoDate();
   const scheduleTodayHref = scheduleLink({ date: today });
@@ -92,17 +105,104 @@ export function MissionControlDashboard({
 
       <TodaysBriefingCard briefing={briefing} />
 
-      <AutomationNotificationsBanner notifications={automationNotifications} />
+      <PlutoBrainSection
+        fallbackBriefing={briefing}
+        topRecommendations={plutoRecommendations.slice(0, 3)}
+        proposedActionCount={proposedActionCount}
+        brainEnabled={brainStatus.enabled}
+        realAiConfigured={brainStatus.realAiConfigured}
+      />
+
+      <div className="mb-8">
+        <Link
+          href="/dashboard/actions"
+          className="flex items-center justify-between rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-5 py-4 backdrop-blur-sm transition-colors hover:border-indigo-500/35 hover:bg-indigo-500/10"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-indigo-500/25 bg-indigo-500/10 text-indigo-300">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-white">Action Center</p>
+              <p className="text-xs text-zinc-400">
+                Review and approve proposed changes before they run
+              </p>
+            </div>
+          </div>
+          {proposedActionCount > 0 ? (
+            <span className="rounded-full bg-indigo-500/20 px-2.5 py-1 text-xs font-semibold text-indigo-200">
+              {proposedActionCount} waiting
+            </span>
+          ) : (
+            <span className="text-xs text-zinc-500">Open →</span>
+          )}
+        </Link>
+      </div>
 
       <PlutoRecommendationsPanel recommendations={plutoRecommendations} />
 
       <BusinessInsightsPanel insights={businessInsights} />
 
       <DashboardSection
+        title="Invoices"
+        subtitle="Billing health at a glance — click any card to review."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardStatCard
+            label="Draft invoices"
+            value={invoiceMetrics.draftCount}
+            href={invoicesLink({ filter: "draft" })}
+            accent="info"
+            icon={
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+            }
+          />
+          <DashboardStatCard
+            label="Outstanding total"
+            value={formatCurrency(invoiceMetrics.outstandingTotal)}
+            href={invoicesLink({ filter: "sent" })}
+            accent="warning"
+            icon={
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+              </svg>
+            }
+          />
+          <DashboardStatCard
+            label="Overdue total"
+            value={formatCurrency(invoiceMetrics.overdueTotal)}
+            href={invoicesLink({ filter: "overdue" })}
+            accent="warning"
+            highlight={invoiceMetrics.overdueTotal > 0}
+            icon={
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            }
+          />
+          <DashboardStatCard
+            label="Paid this month"
+            value={formatCurrency(invoiceMetrics.paidThisMonth)}
+            href={invoicesLink({ filter: "paid" })}
+            accent="success"
+            icon={
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+          />
+        </div>
+      </DashboardSection>
+
+      <DashboardSection
         title="Quick Actions"
         subtitle="Jump straight into the work that moves your business forward."
       >
-        <QuickActions customers={customers} employees={employees} />
+        <QuickActions customers={customers} employees={employees} businessHours={businessHours} />
       </DashboardSection>
 
       <DashboardSection

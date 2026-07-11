@@ -15,6 +15,8 @@ import {
   formatDisplayDate,
   formatTimeDisplay,
 } from "@/lib/appointments/datetime";
+import type { InvoicePayment } from "@/lib/invoices/types";
+import { formatCurrency } from "@/lib/invoices/types";
 import { PRIORITY_LABELS, STATUS_LABELS, type Task } from "@/lib/tasks/types";
 
 export type TimelineFilter =
@@ -37,7 +39,12 @@ export type TimelineEventKind =
   | "communication_note"
   | "communication_call"
   | "communication_email"
-  | "communication_attachment";
+  | "communication_attachment"
+  | "invoice_created"
+  | "invoice_sent"
+  | "payment_recorded"
+  | "invoice_paid"
+  | "invoice_voided";
 
 export type CustomerTimelineEvent = {
   id: string;
@@ -55,10 +62,22 @@ export type CustomerTimelineEvent = {
   employeeName?: string;
   communication?: CustomerCommunication;
   attachment?: CommunicationAttachment;
+  invoiceId?: string;
+  invoiceNumber?: string;
 };
 
 type TaskRow = Task & {
   employees?: { full_name: string; color: string } | null;
+};
+
+type InvoiceTimelineRow = {
+  id: string;
+  invoice_number: string;
+  status: string;
+  total_amount: number;
+  created_at: string;
+  updated_at: string;
+  payments?: InvoicePayment[];
 };
 
 function buildAppointmentSubtitle(appointment: AppointmentWithCustomer) {
@@ -72,6 +91,7 @@ export function buildCustomerTimelineEvents(
   appointments: AppointmentWithCustomer[],
   communications: CustomerCommunication[] = [],
   attachments: CommunicationAttachment[] = [],
+  invoices: InvoiceTimelineRow[] = [],
 ): CustomerTimelineEvent[] {
   const events: CustomerTimelineEvent[] = [
     {
@@ -230,6 +250,66 @@ export function buildCustomerTimelineEvents(
     }
   }
 
+  for (const invoice of invoices) {
+    events.push({
+      id: `invoice-created-${invoice.id}`,
+      kind: "invoice_created",
+      timestamp: invoice.created_at,
+      title: "Invoice created",
+      subtitle: `${invoice.invoice_number} · ${formatCurrency(Number(invoice.total_amount))}`,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoice_number,
+    });
+
+    if (["sent", "viewed", "partially_paid", "paid", "overdue"].includes(invoice.status)) {
+      events.push({
+        id: `invoice-sent-${invoice.id}`,
+        kind: "invoice_sent",
+        timestamp: invoice.updated_at,
+        title: "Invoice sent",
+        subtitle: invoice.invoice_number,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoice_number,
+      });
+    }
+
+    for (const payment of invoice.payments ?? []) {
+      events.push({
+        id: `payment-recorded-${payment.id}`,
+        kind: "payment_recorded",
+        timestamp: payment.created_at,
+        title: "Payment recorded",
+        subtitle: `${formatCurrency(Number(payment.amount))} on ${invoice.invoice_number}`,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoice_number,
+      });
+    }
+
+    if (invoice.status === "paid") {
+      events.push({
+        id: `invoice-paid-${invoice.id}`,
+        kind: "invoice_paid",
+        timestamp: invoice.updated_at,
+        title: "Invoice paid",
+        subtitle: invoice.invoice_number,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoice_number,
+      });
+    }
+
+    if (invoice.status === "void") {
+      events.push({
+        id: `invoice-voided-${invoice.id}`,
+        kind: "invoice_voided",
+        timestamp: invoice.updated_at,
+        title: "Invoice voided",
+        subtitle: invoice.invoice_number,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoice_number,
+      });
+    }
+  }
+
   return events.sort(
     (a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
@@ -335,6 +415,27 @@ export function getTimelineEventMeta(kind: TimelineEventKind) {
       return {
         iconClass: "border-violet-400/60 bg-violet-500/20 text-violet-300",
         label: "Attachment",
+      };
+    case "invoice_created":
+    case "invoice_sent":
+      return {
+        iconClass: "border-indigo-400/60 bg-indigo-500/20 text-indigo-300",
+        label: "Invoice",
+      };
+    case "payment_recorded":
+      return {
+        iconClass: "border-emerald-400/60 bg-emerald-500/20 text-emerald-300",
+        label: "Payment",
+      };
+    case "invoice_paid":
+      return {
+        iconClass: "border-emerald-400/60 bg-emerald-500/20 text-emerald-300",
+        label: "Paid",
+      };
+    case "invoice_voided":
+      return {
+        iconClass: "border-zinc-400/60 bg-zinc-500/20 text-zinc-300",
+        label: "Void",
       };
     default:
       return {

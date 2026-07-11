@@ -6,6 +6,10 @@ import {
 } from "@/lib/appointments/datetime";
 import { loadBusinessInsightContext } from "@/lib/insights/context";
 import type { CustomerAppointmentSummary } from "@/lib/insights/context";
+import {
+  getCompletedAppointmentsWithoutInvoice,
+  getInvoices,
+} from "@/lib/invoices";
 import type { RecommendationContext } from "./types";
 
 function getMonthStartIsoDate(today: string) {
@@ -93,8 +97,13 @@ export async function loadRecommendationContext(
   const weekEnd = getWeekEnd(base.today);
   const weekDates = getWeekDates(base.today);
 
-  const [{ count: unassignedTaskCount }, { data: weekAppointments }, repeatCustomersThisMonth] =
-    await Promise.all([
+  const [
+    { count: unassignedTaskCount },
+    { data: weekAppointments },
+    repeatCustomersThisMonth,
+    completedAppointmentsWithoutInvoice,
+    overdueInvoicesRaw,
+  ] = await Promise.all([
       supabase
         .from("tasks")
         .select("*", { count: "exact", head: true })
@@ -109,6 +118,8 @@ export async function loadRecommendationContext(
         .gte("appointment_date", base.today)
         .lte("appointment_date", weekEnd),
       loadRepeatCustomersThisMonth(businessProfileId, base.today),
+      getCompletedAppointmentsWithoutInvoice(businessProfileId, 5),
+      getInvoices(businessProfileId, { filter: "overdue", limit: 5 }),
     ]);
 
   const datesWithAppointments = new Set(
@@ -124,5 +135,13 @@ export async function loadRecommendationContext(
     unassignedTaskCount: unassignedTaskCount ?? 0,
     emptyDaysThisWeek,
     repeatCustomersThisMonth,
+    completedAppointmentsWithoutInvoice,
+    overdueInvoices: overdueInvoicesRaw.map((invoice) => ({
+      id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      customer_name:
+        invoice.customers?.company || invoice.customers?.name || "Customer",
+      balance_due: invoice.balance_due,
+    })),
   };
 }

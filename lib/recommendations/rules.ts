@@ -6,6 +6,7 @@ import {
   customerProfileLink,
   customersLink,
   employeesLink,
+  invoicesLink,
   scheduleLink,
   tasksLink,
 } from "@/lib/dashboard/links";
@@ -434,6 +435,40 @@ export const recommendEmptyScheduleDays: RecommendationRule = (context) => {
   ];
 };
 
+export const recommendCompletedAppointmentInvoices: RecommendationRule = (context) => {
+  if (context.completedAppointmentsWithoutInvoice.length === 0) {
+    return [];
+  }
+
+  return context.completedAppointmentsWithoutInvoice.map((appointment) => ({
+    id: `pluto-completed-appointment-${appointment.id}`,
+    severity: "info",
+    category: "business",
+    title: "Create invoice for completed visit",
+    explanation: `"${appointment.title}" with ${appointment.customer_name} on ${appointment.appointment_date} is complete but has no invoice yet.`,
+    suggestedAction: "Propose a draft invoice so you can bill the customer after approval.",
+    actionLabel: "Create invoice",
+    actionHref: invoicesLink({ appointmentId: appointment.id }),
+  }));
+};
+
+export const recommendOverdueInvoices: RecommendationRule = (context) => {
+  if (context.overdueInvoices.length === 0) {
+    return [];
+  }
+
+  return context.overdueInvoices.map((invoice) => ({
+    id: `pluto-overdue-invoice-${invoice.id}`,
+    severity: "warning",
+    category: "business",
+    title: "Overdue invoice needs follow-up",
+    explanation: `${invoice.invoice_number} for ${invoice.customer_name} is past due with $${invoice.balance_due.toFixed(2)} outstanding.`,
+    suggestedAction: "Send a reminder or record a payment once received.",
+    actionLabel: "View invoice",
+    actionHref: invoicesLink({ invoiceId: invoice.id }),
+  }));
+};
+
 export const RECOMMENDATION_RULES: RecommendationRule[] = [
   recommendUnassignedAppointments,
   recommendUnassignedTasks,
@@ -445,4 +480,6 @@ export const RECOMMENDATION_RULES: RecommendationRule[] = [
   recommendStartingSoonAppointments,
   recommendRepeatCustomersThisMonth,
   recommendEmptyScheduleDays,
+  recommendCompletedAppointmentInvoices,
+  recommendOverdueInvoices,
 ];

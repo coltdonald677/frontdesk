@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function SettingsPage() {
-  redirect("/dashboard/settings/automations");
+  redirect("/dashboard/settings/profile");
 }

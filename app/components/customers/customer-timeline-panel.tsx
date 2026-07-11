@@ -8,6 +8,7 @@ import {
 } from "@/lib/customer-activities/types";
 import type { Customer } from "@/lib/customers/types";
 import type { Employee } from "@/lib/employees/types";
+import type { BusinessHoursSettings } from "@/lib/business-settings/types";
 import {
   filterTimelineEvents,
   formatTimelineTimestamp,
@@ -33,6 +34,7 @@ type CustomerTimelinePanelProps = {
   events: CustomerTimelineEvent[];
   employees: Employee[];
   customers: Customer[];
+  businessHours?: BusinessHoursSettings;
 };
 
 export function CustomerTimelinePanel({
@@ -40,6 +42,7 @@ export function CustomerTimelinePanel({
   events,
   employees,
   customers,
+  businessHours,
 }: CustomerTimelinePanelProps) {
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const [selectedEvent, setSelectedEvent] =
@@ -207,6 +210,7 @@ export function CustomerTimelinePanel({
           appointment={selectedAppointment}
           customers={customers}
           employees={employees}
+          businessHours={businessHours}
           onClose={() => setSelectedAppointmentId(null)}
         />
       )}

@@ -10,6 +10,9 @@ import {
   type CustomerActivityType,
 } from "@/lib/customer-activities";
 import { dispatchAutomationEvent } from "@/lib/automation";
+import {
+  notifyCustomerCreated,
+} from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 
 export type CustomerActionState = {
@@ -60,6 +63,7 @@ function parseCustomerForm(formData: FormData) {
 function revalidateCustomerPaths(customerId?: string) {
   revalidatePath("/dashboard/customers");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/notifications");
   if (customerId) {
     revalidatePath(`/dashboard/customers/${customerId}`);
   }
@@ -88,6 +92,11 @@ export async function createCustomer(
   if (error) {
     return { error: error.message };
   }
+
+  await notifyCustomerCreated(profile.id, {
+    customerId: created.id,
+    customerName: created.name,
+  });
 
   try {
     await dispatchAutomationEvent(profile.id, {

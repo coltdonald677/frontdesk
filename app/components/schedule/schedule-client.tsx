@@ -39,6 +39,7 @@ import {
 } from "@/lib/appointments/types";
 import type { ScheduleFilter } from "@/lib/dashboard/links";
 import type { Customer } from "@/lib/customers/types";
+import type { BusinessHoursSettings } from "@/lib/business-settings";
 import type { Employee } from "@/lib/employees/types";
 
 type ScheduleView = "day" | "week" | "month";
@@ -49,6 +50,7 @@ type ScheduleClientProps = {
   appointments: AppointmentWithCustomer[];
   customers: Customer[];
   employees: Employee[];
+  businessHours: BusinessHoursSettings;
   selectedDate: string;
   view: ScheduleView;
   initialFilter?: ScheduleFilter;
@@ -242,6 +244,7 @@ export function ScheduleClient({
   appointments,
   customers,
   employees,
+  businessHours,
   selectedDate,
   view,
   initialFilter,
@@ -779,6 +782,7 @@ export function ScheduleClient({
           appointment={selectedAppointment}
           customers={customers}
           employees={employees}
+          businessHours={businessHours}
           onClose={() => setSelectedAppointment(null)}
         />
       )}
@@ -787,6 +791,7 @@ export function ScheduleClient({
         <AppointmentDetailModal
           customers={customers}
           employees={employees}
+          businessHours={businessHours}
           defaultDate={createDefaultDate}
           onClose={() => setShowCreateModal(false)}
         />

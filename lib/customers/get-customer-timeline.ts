@@ -27,25 +27,41 @@ export async function getCustomerTimeline(
     { data: appointments },
     communications,
     attachments,
+    { data: invoices },
   ] = await Promise.all([
-      supabase
-        .from("customer_activities")
-        .select("*")
-        .eq("customer_id", customer.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("tasks")
-        .select("*, employees(full_name, color)")
-        .eq("customer_id", customer.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("appointments")
-        .select("*, customers(name, company), employees(full_name, color)")
-        .eq("customer_id", customer.id)
-        .order("created_at", { ascending: false }),
+    supabase
+      .from("customer_activities")
+      .select("*")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("tasks")
+      .select("*, employees(full_name, color)")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("appointments")
+      .select("*, customers(name, company), employees(full_name, color)")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false }),
     getCustomerCommunicationsForTimeline(customer.id),
     getCommunicationAttachmentsForTimeline(customer.id),
+    supabase
+      .from("invoices")
+      .select("id, invoice_number, status, total_amount, created_at, updated_at, invoice_payments(*)")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false }),
   ]);
+
+  const invoiceRows = (invoices ?? []).map((invoice) => {
+    const { invoice_payments, ...rest } = invoice as typeof invoice & {
+      invoice_payments?: Array<Record<string, unknown>>;
+    };
+    return {
+      ...rest,
+      payments: invoice_payments ?? [],
+    };
+  });
 
   return buildCustomerTimelineEvents(
     customer,
@@ -54,5 +70,6 @@ export async function getCustomerTimeline(
     (appointments ?? []) as AppointmentWithCustomer[],
     communications,
     attachments,
+    invoiceRows,
   );
 }

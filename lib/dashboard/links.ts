@@ -145,7 +145,7 @@ export function parseEmployeeFocus(value?: string): EmployeeFocus | undefined {
 
 export function customerProfileLink(
   customerId: string,
-  tab?: "overview" | "timeline" | "communications" | "appointments" | "tasks" | "activity",
+  tab?: "overview" | "timeline" | "communications" | "appointments" | "tasks" | "activity" | "invoices",
 ) {
   const params = new URLSearchParams();
   if (tab) {
@@ -156,4 +156,64 @@ export function customerProfileLink(
   return query
     ? `/dashboard/customers/${customerId}?${query}`
     : `/dashboard/customers/${customerId}`;
+}
+
+export type InvoiceFilter =
+  | "all"
+  | "draft"
+  | "sent"
+  | "overdue"
+  | "paid"
+  | "void";
+
+export function invoicesLink(options?: {
+  filter?: InvoiceFilter;
+  search?: string;
+  newInvoice?: boolean;
+  customerId?: string;
+  appointmentId?: string;
+  invoiceId?: string;
+}) {
+  if (options?.invoiceId) {
+    return `/dashboard/invoices/${options.invoiceId}`;
+  }
+
+  const params = new URLSearchParams();
+
+  if (options?.filter && options.filter !== "all") {
+    params.set("filter", options.filter);
+  }
+
+  if (options?.search) {
+    params.set("search", options.search);
+  }
+
+  if (options?.newInvoice) {
+    params.set("new", "invoice");
+  }
+
+  if (options?.customerId) {
+    params.set("customer", options.customerId);
+  }
+
+  if (options?.appointmentId) {
+    params.set("appointment", options.appointmentId);
+  }
+
+  const query = params.toString();
+  return query ? `/dashboard/invoices?${query}` : "/dashboard/invoices";
+}
+
+export function parseInvoiceFilter(value?: string): InvoiceFilter {
+  if (
+    value === "draft" ||
+    value === "sent" ||
+    value === "overdue" ||
+    value === "paid" ||
+    value === "void"
+  ) {
+    return value;
+  }
+
+  return "all";
 }

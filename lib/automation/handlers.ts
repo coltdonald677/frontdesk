@@ -1,12 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { addDaysToIsoDate, getTodayIsoDate } from "@/lib/appointments/datetime";
-import {
-  customerProfileLink,
-  scheduleLink,
-  tasksLink,
-} from "@/lib/dashboard/links";
 import { createClient } from "@/lib/supabase/server";
-import { addAutomationNotification } from "./store";
 import type {
   AutomationRunResult,
   AutomationRuntime,
@@ -52,7 +46,6 @@ const handleAppointmentCompleted: Handler = async (runtime, store) => {
 
   const { payload } = runtime.event;
   const actions: string[] = [];
-  let nextStore = store;
 
   await insertCustomerActivity(
     runtime.businessProfileId,
@@ -61,14 +54,6 @@ const handleAppointmentCompleted: Handler = async (runtime, store) => {
     `Appointment completed: "${payload.title}". Consider sending an invoice.`,
   );
   actions.push("Created timeline activity");
-
-  nextStore = addAutomationNotification(nextStore, {
-    automationId: "appointment_completed",
-    title: "Invoice suggested",
-    message: `Create an invoice for ${payload.customerName ?? "this customer"} after "${payload.title}".`,
-    href: customerProfileLink(payload.customerId, "overview"),
-  });
-  actions.push("Added invoice suggestion notification");
 
   const supabase = await createClient();
   const followUpDue = addDaysToIsoDate(getTodayIsoDate(), 3);
@@ -93,7 +78,7 @@ const handleAppointmentCompleted: Handler = async (runtime, store) => {
   revalidatePath("/dashboard");
 
   return {
-    store: nextStore,
+    store,
     result: success("Appointment completion workflow finished.", actions),
   };
 };
@@ -104,7 +89,6 @@ const handleNewCustomer: Handler = async (runtime, store) => {
   }
 
   const { payload } = runtime.event;
-  let nextStore = store;
   const actions: string[] = [];
 
   await insertCustomerActivity(
@@ -115,20 +99,12 @@ const handleNewCustomer: Handler = async (runtime, store) => {
   );
   actions.push("Created welcome activity");
 
-  nextStore = addAutomationNotification(nextStore, {
-    automationId: "new_customer",
-    title: "Schedule first appointment",
-    message: `Schedule a first visit for ${payload.customerName}.`,
-    href: scheduleLink({ newAppointment: true }),
-  });
-  actions.push("Suggested scheduling first appointment");
-
   revalidatePath(`/dashboard/customers/${payload.customerId}`);
   revalidatePath("/dashboard/customers");
   revalidatePath("/dashboard");
 
   return {
-    store: nextStore,
+    store,
     result: success("New customer workflow finished.", actions),
   };
 };
@@ -139,23 +115,13 @@ const handleOverdueTask: Handler = async (runtime, store) => {
   }
 
   const { payload } = runtime.event;
-  let nextStore = store;
-  const actions: string[] = [];
-
-  nextStore = addAutomationNotification(nextStore, {
-    automationId: "overdue_task",
-    title: "Overdue task flagged",
-    message: `"${payload.taskTitle}" is overdue. Pluto added this to your recommendations.`,
-    href: tasksLink({ filter: "overdue" }),
-  });
-  actions.push("Created dashboard notification");
-  actions.push("Overdue task will appear in Pluto Recommendations");
+  const actions: string[] = ["Overdue task will appear in Pluto Recommendations"];
 
   const processed = new Set(store.processedOverdueTaskIds ?? []);
   processed.add(payload.taskId);
 
-  nextStore = {
-    ...nextStore,
+  const nextStore = {
+    ...store,
     processedOverdueTaskIds: [...processed],
   };
 
@@ -174,7 +140,6 @@ const handleAppointmentCreated: Handler = async (runtime, store) => {
   }
 
   const { payload } = runtime.event;
-  let nextStore = store;
   const actions: string[] = [];
 
   await insertCustomerActivity(
@@ -185,22 +150,12 @@ const handleAppointmentCreated: Handler = async (runtime, store) => {
   );
   actions.push("Added timeline activity");
 
-  if (payload.employeeId && payload.employeeName) {
-    nextStore = addAutomationNotification(nextStore, {
-      automationId: "appointment_created",
-      title: "New assignment",
-      message: `${payload.employeeName} was assigned to "${payload.title}".`,
-      href: scheduleLink({ date: payload.appointmentDate }),
-    });
-    actions.push("Notified assigned employee");
-  }
-
   revalidatePath(`/dashboard/customers/${payload.customerId}`);
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard");
 
   return {
-    store: nextStore,
+    store,
     result: success("Appointment created workflow finished.", actions),
   };
 };
@@ -211,18 +166,7 @@ const handleEmployeeAssigned: Handler = async (runtime, store) => {
   }
 
   const { payload } = runtime.event;
-  let nextStore = store;
-  const actions: string[] = [];
-
-  if (payload.employeeId && payload.employeeName) {
-    nextStore = addAutomationNotification(nextStore, {
-      automationId: "employee_assigned",
-      title: "Employee assigned",
-      message: `${payload.employeeName} is now assigned to "${payload.title}". Workload metrics refreshed.`,
-      href: `/dashboard/employees/${payload.employeeId}`,
-    });
-    actions.push("Notified assigned employee");
-  }
+  const actions: string[] = ["Refreshed dashboard and workload metrics"];
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/employees");
@@ -230,10 +174,9 @@ const handleEmployeeAssigned: Handler = async (runtime, store) => {
     revalidatePath(`/dashboard/employees/${payload.employeeId}`);
   }
   revalidatePath("/dashboard/schedule");
-  actions.push("Refreshed dashboard and workload metrics");
 
   return {
-    store: nextStore,
+    store,
     result: success("Employee assignment workflow finished.", actions),
   };
 };

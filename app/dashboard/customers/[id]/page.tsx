@@ -4,7 +4,9 @@ import { CustomerWorkspaceClient } from "@/app/components/customers/customer-wor
 import { getCustomerActivities } from "@/lib/customer-activities";
 import { getBusinessProfile } from "@/lib/business-profile";
 import { getCustomerCommunications } from "@/lib/communications/communications";
+import { getBusinessHoursForBusiness } from "@/lib/business-settings";
 import { getCustomer, getCustomerWorkspaceStats } from "@/lib/customers";
+import { getCustomerInvoiceSummary, getInvoices } from "@/lib/invoices";
 import { getCustomerTimeline } from "@/lib/customers/get-customer-timeline";
 import { deriveCustomerStatus } from "@/lib/customers/status";
 import { getEmployees } from "@/lib/employees";
@@ -35,6 +37,7 @@ function parseInitialTab(tab?: string) {
     tab === "communications" ||
     tab === "appointments" ||
     tab === "tasks" ||
+    tab === "invoices" ||
     tab === "activity"
   ) {
     return tab;
@@ -61,13 +64,16 @@ export default async function CustomerDetailPage({
     notFound();
   }
 
-  const [stats, activities, timelineEvents, employees, communicationsHub] =
+  const [stats, activities, timelineEvents, employees, communicationsHub, customerInvoices, invoiceSummary, businessHours] =
     await Promise.all([
     getCustomerWorkspaceStats(id),
     getCustomerActivities(id),
     getCustomerTimeline(customer),
     getEmployees(profile!.id),
     getCustomerCommunications(id),
+    getInvoices(profile!.id, { customerId: id }),
+    getCustomerInvoiceSummary(profile!.id, id),
+    getBusinessHoursForBusiness(profile!.id),
   ]);
 
   const status = deriveCustomerStatus(stats);
@@ -86,7 +92,10 @@ export default async function CustomerDetailPage({
           communicationsHub={communicationsHub}
           employees={employees}
           customers={[customer]}
+          businessHours={businessHours}
           initialTab={parseInitialTab(tab)}
+          customerInvoices={customerInvoices}
+          invoiceSummary={invoiceSummary}
         />
       </div>
     </DashboardShell>

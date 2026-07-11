@@ -83,6 +83,7 @@ export async function runAutomationNowAction(
     revalidatePath("/dashboard/schedule");
     revalidatePath("/dashboard/tasks");
     revalidatePath("/dashboard/employees");
+    revalidatePath("/dashboard/notifications");
 
     if (result.status === "error") {
       return { error: result.message };
