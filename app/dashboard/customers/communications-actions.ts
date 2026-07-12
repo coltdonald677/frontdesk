@@ -17,6 +17,10 @@ import {
   type PhoneCallOutcome,
 } from "@/lib/communications/types";
 import { createClient } from "@/lib/supabase/server";
+import {
+  verifyCommunicationBelongsToCustomer,
+  verifyEmployeeBelongsToBusiness,
+} from "@/lib/communications/ownership-security";
 
 export type CommunicationActionState = {
   error?: string;
@@ -70,6 +74,24 @@ function parseOptionalEmployeeId(formData: FormData) {
   return value || null;
 }
 
+async function verifyOptionalEmployee(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  businessProfileId: string,
+  employeeId: string | null,
+): Promise<CommunicationActionState | null> {
+  if (!employeeId) {
+    return null;
+  }
+
+  const result = await verifyEmployeeBelongsToBusiness(
+    supabase,
+    businessProfileId,
+    employeeId,
+  );
+
+  return result.ok ? null : { error: result.error };
+}
+
 function isPhoneCallOutcome(value: string): value is PhoneCallOutcome {
   return PHONE_CALL_OUTCOMES.includes(value as PhoneCallOutcome);
 }
@@ -105,6 +127,15 @@ export async function createCommunicationNote(
 
   if (!(await verifyCustomer(supabase, profile.id, customerId))) {
     return { error: "Customer not found." };
+  }
+
+  const employeeError = await verifyOptionalEmployee(
+    supabase,
+    profile.id,
+    employeeId,
+  );
+  if (employeeError) {
+    return employeeError;
   }
 
   const sanitizedBody = sanitizeCommunicationHtml(bodyHtmlRaw);
@@ -174,6 +205,15 @@ export async function createPhoneCallLog(
     return { error: "Customer not found." };
   }
 
+  const employeeError = await verifyOptionalEmployee(
+    supabase,
+    profile.id,
+    employeeId,
+  );
+  if (employeeError) {
+    return employeeError;
+  }
+
   const durationSeconds = Math.max(0, Math.round(durationMinutes * 60));
 
   const { data: communication, error: communicationError } = await supabase
@@ -240,6 +280,15 @@ export async function createCommunicationEmail(
 
   if (!(await verifyCustomer(supabase, profile.id, customerId))) {
     return { error: "Customer not found." };
+  }
+
+  const employeeError = await verifyOptionalEmployee(
+    supabase,
+    profile.id,
+    employeeId,
+  );
+  if (employeeError) {
+    return employeeError;
   }
 
   const toAddresses = parseAddressList(toAddressesRaw);
@@ -323,6 +372,18 @@ export async function uploadCommunicationAttachment(
 
   if (!(await verifyCustomer(supabase, profile.id, customerId))) {
     return { error: "Customer not found." };
+  }
+
+  if (communicationId) {
+    const communicationCheck = await verifyCommunicationBelongsToCustomer(
+      supabase,
+      profile.id,
+      customerId,
+      communicationId,
+    );
+    if (!communicationCheck.ok) {
+      return { error: communicationCheck.error };
+    }
   }
 
   const category = isAttachmentCategory(categoryRaw)

@@ -714,7 +714,7 @@ No SQL migrations, Supabase policy changes, or `isomorphic-dompurify` were added
 
 ## Phase 2B — Invoice & payment security hardening (F-005, F-006, F-009, F-010)
 
-**Status:** Application + tests verified 2026-07-11. **SQL migration created but not auto-applied** — paste `supabase/migrations/20260711200000_invoice_payment_security_hardening.sql` into Supabase SQL editor and confirm manual two-business tests before marking DB layer complete.
+**Status:** Application + tests verified 2026-07-11. **SQL migration applied in Supabase** (`20260711200000_invoice_payment_security_hardening.sql`). Live UI/Data API verification in agent environment limited to unauthenticated session (see live verification report below).
 
 ### Root causes
 
@@ -761,17 +761,17 @@ No SQL migrations, Supabase policy changes, or `isomorphic-dompurify` were added
 
 | Finding | App status | DB status |
 |---------|------------|-----------|
-| **F-005** Invoice RLS FK gaps | **Remediated** (server + migration ready) | **Pending manual SQL apply** |
-| **F-006** `invoice_payments` RLS | **Remediated** (server + migration ready) | **Pending manual SQL apply** |
-| **F-009** Payment overpayment | **Remediated** (server + RPC + trigger ready) | **Pending manual SQL apply** |
-| **F-010** Void partially paid | **Remediated** (server + trigger ready) | **Pending manual SQL apply** |
+| **F-005** Invoice RLS FK gaps | **Remediated** | **SQL applied** |
+| **F-006** `invoice_payments` RLS | **Remediated** | **SQL applied** |
+| **F-009** Payment overpayment | **Remediated** | **SQL applied** |
+| **F-010** Void partially paid | **Remediated** | **SQL applied** |
 
 ### Still open (not fixed in Phase 2B)
 
 | Finding | Status |
 |---------|--------|
-| **F-007** `communication_id` on attachment upload | **Open** |
-| **F-008** `employee_id` in communications | **Open** |
+| **F-007** `communication_id` on attachment upload | **Remediated** (app + migration ready; apply `20260711210000_communication_ownership_security_hardening.sql`) |
+| **F-008** `employee_id` in communications | **Remediated** (app + migration ready; apply `20260711210000_communication_ownership_security_hardening.sql`) |
 
 ### Manual two-business test plan (after SQL apply)
 
@@ -787,10 +787,22 @@ No SQL migrations, Supabase policy changes, or `isomorphic-dompurify` were added
 
 ### Remaining risks
 
-- **F-007 / F-008** communication upload and employee attribution unchanged.
 - **Payment reversals/refunds** not implemented — void remains blocked for any invoice with payment history (by design).
-- **DB layer** untested until migration is manually applied in Supabase.
+- **F-007 / F-008** DB policies require applying `20260711210000_communication_ownership_security_hardening.sql`.
 
 ---
 
-*End of Phase 1 audit. Phase 2A complete — verified 2026-07-11. Phase 2B application layer complete — verified 2026-07-11; SQL pending manual apply.*
+## Phase 2B follow-up — Communication ownership (F-007, F-008)
+
+**Status:** Application + tests verified 2026-07-11. SQL in `supabase/migrations/20260711210000_communication_ownership_security_hardening.sql` — apply manually.
+
+| Finding | Fix |
+|---------|-----|
+| **F-007** | Server validates `communication_id` belongs to customer + business before attachment insert; RLS INSERT policy joins `customer_communications` when `communication_id` is set |
+| **F-008** | Server validates `employee_id` on note/call/email create; RLS INSERT/UPDATE on `customer_communications` validates `employee_id` FK |
+
+**Tests:** `lib/communications/ownership-security.test.ts` (5 tests). Full suite: 73 passed.
+
+---
+
+*End of Phase 1 audit. Phase 2A complete — verified 2026-07-11. Phase 2B complete — SQL applied 2026-07-11. F-007/F-008 app complete — communication SQL pending apply.*
