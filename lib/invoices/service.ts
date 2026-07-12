@@ -10,6 +10,12 @@ import {
   validateLineItems,
 } from "./calculations";
 import { allocateInvoiceNumber } from "./numbering";
+import { verifyInvoiceForeignKeys, verifyAppointmentBelongsToBusiness } from "./ownership-security";
+import {
+  validatePaymentAgainstBalance,
+  validatePaymentAmount,
+} from "./payment-security";
+import { canVoidInvoice } from "./void-security";
 import type { InvoiceEditAuthorization } from "./edit-authorization";
 import { authorizeInvoiceEdit } from "./edit-authorization";
 import type {
@@ -81,27 +87,28 @@ async function verifyCustomerOwnership(
   customerId: string,
 ): Promise<boolean> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("customers")
-    .select("id")
-    .eq("id", customerId)
-    .eq("business_profile_id", businessProfileId)
-    .maybeSingle();
-  return Boolean(data);
+  const result = await verifyInvoiceForeignKeys(
+    supabase,
+    businessProfileId,
+    customerId,
+    null,
+  );
+  return result.ok;
 }
 
 async function verifyAppointmentOwnership(
   businessProfileId: string,
   appointmentId: string,
+  customerId?: string,
 ): Promise<boolean> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("appointments")
-    .select("id")
-    .eq("id", appointmentId)
-    .eq("business_profile_id", businessProfileId)
-    .maybeSingle();
-  return Boolean(data);
+  const result = await verifyAppointmentBelongsToBusiness(
+    supabase,
+    businessProfileId,
+    appointmentId,
+    customerId,
+  );
+  return result.ok;
 }
 
 export async function getActiveInvoiceForAppointment(
@@ -379,7 +386,11 @@ export async function createInvoice(
 
   if (input.appointment_id) {
     if (
-      !(await verifyAppointmentOwnership(businessProfileId, input.appointment_id))
+      !(await verifyAppointmentOwnership(
+        businessProfileId,
+        input.appointment_id,
+        input.customer_id,
+      ))
     ) {
       throw new Error("Appointment not found.");
     }
@@ -477,6 +488,18 @@ export async function updateInvoice(
     throw new Error("Customer not found.");
   }
 
+  if (input.appointment_id) {
+    if (
+      !(await verifyAppointmentOwnership(
+        businessProfileId,
+        input.appointment_id,
+        input.customer_id,
+      ))
+    ) {
+      throw new Error("Appointment not found.");
+    }
+  }
+
   const totals = calculateInvoiceTotals(
     input.line_items,
     input.discount_amount ?? 0,
@@ -554,6 +577,17 @@ export async function updateInvoiceStatus(
     throw new Error("Void invoices cannot be changed.");
   }
 
+  if (status === "void") {
+    const voidCheck = canVoidInvoice({
+      status: existing.status,
+      amount_paid: existing.amount_paid,
+      payment_count: existing.payments.length,
+    });
+    if (!voidCheck.ok) {
+      throw new Error(voidCheck.error);
+    }
+  }
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("invoices")
@@ -586,45 +620,51 @@ export async function recordInvoicePayment(
     throw new Error("Cannot record payment on a void invoice.");
   }
 
-  if (input.amount <= 0) {
-    throw new Error("Payment amount must be greater than zero.");
+  const amountCheck = validatePaymentAmount(input.amount);
+  if (!amountCheck.ok) {
+    throw new Error(amountCheck.error);
+  }
+
+  const balanceCheck = validatePaymentAgainstBalance(
+    amountCheck.amount,
+    existing.total_amount,
+    existing.amount_paid,
+  );
+  if (!balanceCheck.ok) {
+    throw new Error(balanceCheck.error);
   }
 
   const supabase = await createClient();
 
-  const { error: paymentError } = await supabase.from("invoice_payments").insert({
-    invoice_id: input.invoice_id,
-    business_profile_id: businessProfileId,
-    amount: input.amount,
-    payment_date: input.payment_date,
-    note: input.note?.trim() || null,
-    source: "manual",
-  });
-
-  if (paymentError) {
-    throw new Error(paymentError.message);
-  }
-
-  const amountPaid = existing.amount_paid + input.amount;
-  const balanceDue = Math.max(0, existing.total_amount - amountPaid);
-  const status = deriveStatusAfterPayment(
-    existing.total_amount,
-    amountPaid,
-    existing.status,
+  const { data: paymentId, error: rpcError } = await supabase.rpc(
+    "record_invoice_payment_secure",
+    {
+      p_invoice_id: input.invoice_id,
+      p_business_profile_id: businessProfileId,
+      p_amount: amountCheck.amount,
+      p_payment_date: input.payment_date,
+      p_note: input.note?.trim() || null,
+    },
   );
 
-  const { error } = await supabase
-    .from("invoices")
-    .update({
-      amount_paid: amountPaid,
-      balance_due: balanceDue,
-      status,
-    })
-    .eq("id", input.invoice_id)
-    .eq("business_profile_id", businessProfileId);
+  if (rpcError) {
+    if (rpcError.message.includes("Payment exceeds remaining balance")) {
+      throw new Error("Payment exceeds the remaining balance.");
+    }
+    if (rpcError.message.includes("Payment amount must be greater than zero")) {
+      throw new Error("Payment amount must be greater than zero.");
+    }
+    if (rpcError.message.includes("void invoice")) {
+      throw new Error("Cannot record payment on a void invoice.");
+    }
+    if (rpcError.message.includes("Invoice not found")) {
+      throw new Error("Invoice not found.");
+    }
+    throw new Error("Could not record payment. Please try again.");
+  }
 
-  if (error) {
-    throw new Error(error.message);
+  if (!paymentId) {
+    throw new Error("Could not record payment. Please try again.");
   }
 
   const result = await getInvoiceById(businessProfileId, input.invoice_id);

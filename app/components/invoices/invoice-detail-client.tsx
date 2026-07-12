@@ -19,6 +19,7 @@ import {
   formatCurrency,
   isInvoiceEditable,
 } from "@/lib/invoices/types";
+import { canVoidInvoice } from "@/lib/invoices/void-security";
 import { customerProfileLink } from "@/lib/dashboard/links";
 
 type InvoiceDetailClientProps = {
@@ -37,6 +38,12 @@ export function InvoiceDetailClient({
 
   const customerName =
     invoice.customers?.company || invoice.customers?.name || "Customer";
+
+  const voidAllowed = canVoidInvoice({
+    status: invoice.status,
+    amount_paid: invoice.amount_paid,
+    payment_count: invoice.payments.length,
+  }).ok;
 
   function runAction(action: () => Promise<{ error?: string; success?: boolean; invoiceId?: string }>) {
     setError(null);
@@ -118,7 +125,7 @@ export function InvoiceDetailClient({
               </button>
             </>
           )}
-          {invoice.status !== "void" && invoice.status !== "paid" && (
+          {voidAllowed && (
             <button
               type="button"
               disabled={isPending}

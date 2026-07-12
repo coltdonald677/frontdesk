@@ -670,12 +670,12 @@ The following were **not** found in the codebase and must not be assumed:
 
 | Finding | Status |
 |---------|--------|
-| **F-005** Invoice RLS FK gaps | **Open** |
-| **F-006** `invoice_payments` RLS | **Open** |
+| **F-005** Invoice RLS FK gaps | **Remediated in Phase 2B** (SQL pending manual apply) |
+| **F-006** `invoice_payments` RLS | **Remediated in Phase 2B** (SQL pending manual apply) |
 | **F-007** `communication_id` on attachment upload | **Open** |
 | **F-008** `employee_id` in communications | **Open** |
-| **F-009** Payment overpayment | **Open** |
-| **F-010** Void partially paid invoices | **Open** |
+| **F-009** Payment overpayment | **Remediated in Phase 2B** (SQL pending manual apply) |
+| **F-010** Void partially paid invoices | **Remediated in Phase 2B** (SQL pending manual apply) |
 
 ### Dependencies added (Phase 2A)
 
@@ -712,4 +712,85 @@ No SQL migrations, Supabase policy changes, or `isomorphic-dompurify` were added
 
 ---
 
-*End of Phase 1 audit. Phase 2A complete — verified 2026-07-11.*
+## Phase 2B — Invoice & payment security hardening (F-005, F-006, F-009, F-010)
+
+**Status:** Application + tests verified 2026-07-11. **SQL migration created but not auto-applied** — paste `supabase/migrations/20260711200000_invoice_payment_security_hardening.sql` into Supabase SQL editor and confirm manual two-business tests before marking DB layer complete.
+
+### Root causes
+
+| Finding | Root cause |
+|---------|------------|
+| **F-005** | Invoice RLS INSERT/UPDATE only checked `business_profile_id`; no FK validation for `customer_id` / `appointment_id`. |
+| **F-006** | `invoice_payments` RLS only checked payment row `business_profile_id`; no join to `invoices` for `invoice_id` ownership. |
+| **F-009** | `recordInvoicePayment` checked amount > 0 only; no balance cap; separate insert + invoice update without row lock (race risk). |
+| **F-010** | UI showed Void for `partially_paid`; `updateInvoiceStatus` set `void` without checking payments; no refund/reversal workflow. |
+
+### Application changes
+
+| Area | Change |
+|------|--------|
+| **Ownership** | `lib/invoices/ownership-security.ts` — server-side FK validation for customer, appointment, invoice |
+| **Payments** | `lib/invoices/payment-security.ts` — amount validation + server-derived balance check |
+| **Void** | `lib/invoices/void-security.ts` — block void when payments exist |
+| **Service** | `lib/invoices/service.ts` — wired ownership, payment RPC, void guard in `updateInvoiceStatus` |
+| **UI** | `app/components/invoices/invoice-detail-client.tsx` — Void button uses `canVoidInvoice()` |
+| **Exports** | `lib/invoices/index.ts` — exports security helpers |
+
+### Migration (manual apply required)
+
+**File:** `supabase/migrations/20260711200000_invoice_payment_security_hardening.sql`
+
+- Replaces invoice INSERT/UPDATE RLS with customer + appointment ownership checks (DROP POLICY required)
+- Replaces `invoice_payments` SELECT/INSERT/UPDATE/DELETE RLS with invoice join (DROP POLICY required)
+- Adds `validate_invoice_payment_amount` BEFORE INSERT trigger (overpayment + void guard)
+- Adds `record_invoice_payment_secure` RPC (`FOR UPDATE` on invoice for concurrency-safe payments)
+- Adds `prevent_unsafe_invoice_void` BEFORE UPDATE trigger (blocks void when payments exist)
+
+### Automated tests added
+
+| File | Tests |
+|------|-------|
+| `lib/invoices/payment-security.test.ts` | 10 |
+| `lib/invoices/void-security.test.ts` | 7 |
+| `lib/invoices/ownership-security.test.ts` | 7 |
+| `lib/invoices/invoice-payment-security.test.ts` | 4 |
+
+**Results:** 56 passed, 0 failed (9 test files). `npm run typecheck` pass. `npm run build` pass.
+
+### Remediated findings (Phase 2B scope)
+
+| Finding | App status | DB status |
+|---------|------------|-----------|
+| **F-005** Invoice RLS FK gaps | **Remediated** (server + migration ready) | **Pending manual SQL apply** |
+| **F-006** `invoice_payments` RLS | **Remediated** (server + migration ready) | **Pending manual SQL apply** |
+| **F-009** Payment overpayment | **Remediated** (server + RPC + trigger ready) | **Pending manual SQL apply** |
+| **F-010** Void partially paid | **Remediated** (server + trigger ready) | **Pending manual SQL apply** |
+
+### Still open (not fixed in Phase 2B)
+
+| Finding | Status |
+|---------|--------|
+| **F-007** `communication_id` on attachment upload | **Open** |
+| **F-008** `employee_id` in communications | **Open** |
+
+### Manual two-business test plan (after SQL apply)
+
+**Setup:** Two accounts — Business A and Business B. Each with Customer A/B, Invoice A/B (unpaid).
+
+1. **F-005 cross-tenant invoice** — In Business A browser console, attempt `invoices.insert` with A's `business_profile_id` + B's `customer_id` → rejected by RLS. Repeat with B's `appointment_id`.
+2. **F-005 server actions** — Create/edit invoice via dashboard with B's `customer_id` in tampered form → "Customer not found."
+3. **F-006 cross-tenant payment** — Attempt `invoice_payments.insert` with A's `business_profile_id` + B's `invoice_id` → rejected by RLS.
+4. **F-009 overpayment** — Invoice A $100, record $150 → "Payment exceeds the remaining balance." Record $40 then $60 → succeeds (paid).
+5. **F-009 invalid amounts** — $0, -$10, $10.001 → rejected.
+6. **F-010 void** — Unpaid Invoice A → Void succeeds. Partial payment then Void → blocked (UI hidden + server error). Paid invoice → blocked.
+7. **Action Center** — Execute `create_invoice` for owned customer only; cross-tenant IDs rejected by same server paths.
+
+### Remaining risks
+
+- **F-007 / F-008** communication upload and employee attribution unchanged.
+- **Payment reversals/refunds** not implemented — void remains blocked for any invoice with payment history (by design).
+- **DB layer** untested until migration is manually applied in Supabase.
+
+---
+
+*End of Phase 1 audit. Phase 2A complete — verified 2026-07-11. Phase 2B application layer complete — verified 2026-07-11; SQL pending manual apply.*
