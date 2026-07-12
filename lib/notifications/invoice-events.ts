@@ -91,3 +91,48 @@ export async function notifyInvoicePaid(
     dedupeEntityId: `${invoice.id}:paid`,
   });
 }
+
+export async function notifyInvoiceOpened(
+  businessProfileId: string,
+  invoiceId: string,
+  invoiceNumber: string,
+) {
+  await createNotification({
+    businessProfileId,
+    type: "invoice.opened",
+    severity: "info",
+    title: "Invoice opened",
+    description: `${invoiceNumber} was opened by the customer.`,
+    actionLabel: "View invoice",
+    actionHref: invoicesLink({ invoiceId }),
+    relatedEntityType: "invoice",
+    relatedEntityId: invoiceId,
+    source: "system",
+    dedupe: true,
+    dedupeEntityId: `${invoiceId}:opened`,
+  });
+}
+
+export async function notifyInvoiceDeliveryFailed(
+  businessProfileId: string,
+  invoice: InvoiceWithCustomer | InvoiceWithDetails,
+  errorMessage: string,
+) {
+  const customerName =
+    invoice.customers?.company || invoice.customers?.name || "a customer";
+
+  await createNotification({
+    businessProfileId,
+    type: "invoice.delivery_failed",
+    severity: "warning",
+    title: "Invoice delivery failed",
+    description: `Could not deliver ${invoice.invoice_number} to ${customerName}. ${errorMessage}`,
+    actionLabel: "View invoice",
+    actionHref: invoicesLink({ invoiceId: invoice.id }),
+    relatedEntityType: "invoice",
+    relatedEntityId: invoice.id,
+    source: "system",
+    dedupe: true,
+    dedupeEntityId: `${invoice.id}:delivery_failed`,
+  });
+}

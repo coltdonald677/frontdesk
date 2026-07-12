@@ -5,6 +5,7 @@ import { InvoiceForm } from "@/app/components/invoices/invoice-form";
 import { getBusinessProfile } from "@/lib/business-profile";
 import { getCustomers } from "@/lib/customers";
 import { canRenderInvoiceEditForm, getInvoiceById } from "@/lib/invoices";
+import { getInvoiceDeliverySummary } from "@/lib/invoices/delivery-service";
 import { createClient } from "@/lib/supabase/server";
 
 function getUserDisplay(user: {
@@ -50,13 +51,19 @@ export default async function InvoiceDetailPage({
       ? await getCustomers(profile!.id)
       : [];
 
+  const delivery = await getInvoiceDeliverySummary(profile!.id, id);
+
   return (
     <DashboardShell displayName={displayName} initials={initials}>
       <div className="mx-auto max-w-6xl">
         {showEdit && customers.length > 0 ? (
           <InvoiceForm customers={customers} invoice={invoice} />
         ) : (
-          <InvoiceDetailClient invoice={invoice} businessProfile={profile!} />
+          <InvoiceDetailClient
+            invoice={invoice}
+            businessProfile={profile!}
+            delivery={delivery}
+          />
         )}
       </div>
     </DashboardShell>

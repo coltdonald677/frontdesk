@@ -19,22 +19,31 @@ import {
   formatCurrency,
   isInvoiceEditable,
 } from "@/lib/invoices/types";
+import type { InvoiceDeliverySummary } from "@/lib/invoices/delivery-types";
+import {
+  DELIVERY_STATUS_LABELS,
+  DELIVERY_STATUS_STYLES,
+} from "@/lib/invoices/delivery-types";
+import { SendInvoiceModal } from "@/app/components/invoices/send-invoice-modal";
 import { canVoidInvoice } from "@/lib/invoices/void-security";
 import { customerProfileLink } from "@/lib/dashboard/links";
 
 type InvoiceDetailClientProps = {
   invoice: InvoiceWithDetails;
   businessProfile: BusinessProfile;
+  delivery: InvoiceDeliverySummary;
 };
 
 export function InvoiceDetailClient({
   invoice,
   businessProfile,
+  delivery,
 }: InvoiceDetailClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
 
   const customerName =
     invoice.customers?.company || invoice.customers?.name || "Customer";
@@ -71,6 +80,11 @@ export function InvoiceDetailClient({
             >
               {STATUS_LABELS[invoice.status]}
             </span>
+            <span
+              className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium uppercase ${DELIVERY_STATUS_STYLES[delivery.status]}`}
+            >
+              {DELIVERY_STATUS_LABELS[delivery.status]}
+            </span>
           </div>
           <p className="mt-2 text-zinc-400">
             {customerName} · Issued {invoice.issue_date}
@@ -87,12 +101,22 @@ export function InvoiceDetailClient({
               Edit draft
             </Link>
           )}
+          {invoice.status !== "void" && (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => setSendOpen(true)}
+              className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-zinc-950"
+            >
+              Send invoice
+            </button>
+          )}
           {invoice.status === "draft" && (
             <button
               type="button"
               disabled={isPending}
               onClick={() => runAction(() => markInvoiceSentAction(invoice.id))}
-              className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-zinc-950"
+              className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs font-medium text-zinc-300"
             >
               Mark sent
             </button>
@@ -251,11 +275,33 @@ export function InvoiceDetailClient({
         </section>
       )}
 
+      {delivery.recipient_email && (
+        <section className="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-5 text-sm text-zinc-400">
+          <h2 className="text-sm font-semibold text-white">Delivery</h2>
+          <p className="mt-2">
+            Last sent to {delivery.recipient_email}
+            {delivery.sent_at ? ` on ${new Date(delivery.sent_at).toLocaleString()}` : ""}
+          </p>
+          {delivery.opened_at && (
+            <p className="mt-1">Opened {new Date(delivery.opened_at).toLocaleString()}</p>
+          )}
+          {delivery.last_error && (
+            <p className="mt-1 text-rose-300">{delivery.last_error}</p>
+          )}
+        </section>
+      )}
+
       <RecordPaymentModal
         open={paymentOpen}
         invoiceId={invoice.id}
         balanceDue={invoice.balance_due}
         onClose={() => setPaymentOpen(false)}
+      />
+      <SendInvoiceModal
+        open={sendOpen}
+        invoiceId={invoice.id}
+        onClose={() => setSendOpen(false)}
+        onSent={() => router.refresh()}
       />
     </div>
   );

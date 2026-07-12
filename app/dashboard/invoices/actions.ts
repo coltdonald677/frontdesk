@@ -23,6 +23,10 @@ import {
   notifyInvoicePaid,
   notifyPaymentRecorded,
 } from "@/lib/notifications/invoice-events";
+import {
+  getInvoiceSendPreview,
+  sendInvoiceDelivery,
+} from "@/lib/invoices/delivery-service";
 
 export type InvoiceActionState = {
   error?: string;
@@ -348,5 +352,55 @@ export async function syncOverdueInvoiceNotificationsAction(): Promise<void> {
     }
   } catch {
     // Non-blocking dashboard sync
+  }
+}
+
+export async function getInvoiceSendPreviewAction(
+  invoiceId: string,
+): Promise<{ preview?: Awaited<ReturnType<typeof getInvoiceSendPreview>>; error?: string }> {
+  try {
+    const profile = await getBusinessContext();
+    const preview = await getInvoiceSendPreview(profile.id, invoiceId);
+    if (!preview) {
+      return { error: "Invoice not found." };
+    }
+    return { preview };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Failed to load send preview.",
+    };
+  }
+}
+
+export async function sendInvoiceAction(
+  invoiceId: string,
+  optionalMessage?: string | null,
+): Promise<InvoiceActionState> {
+  try {
+    const profile = await getBusinessContext();
+    const result = await sendInvoiceDelivery(
+      profile.id,
+      invoiceId,
+      optionalMessage,
+    );
+
+    if (!result.ok) {
+      return { error: result.error };
+    }
+
+    const invoice = await getInvoiceById(profile.id, invoiceId);
+    if (invoice) {
+      revalidateInvoicePaths(invoice.id, invoice.customer_id);
+    }
+
+    return {
+      success: true,
+      message: "Invoice sent successfully.",
+      invoiceId,
+    };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Failed to send invoice.",
+    };
   }
 }

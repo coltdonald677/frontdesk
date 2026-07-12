@@ -61,3 +61,27 @@ export {
   updateInvoice,
   updateInvoiceStatus,
 } from "./service";
+export type {
+  InvoiceDeliveryStatus,
+  InvoiceDeliverySummary,
+  InvoiceSendPreview,
+  PublicInvoiceView,
+} from "./delivery-types";
+export {
+  DELIVERY_STATUS_LABELS,
+  DELIVERY_STATUS_STYLES,
+  INVOICE_DELIVERY_STATUSES,
+} from "./delivery-types";
+export {
+  buildInvoiceSendPreview,
+  mapDeliverySummary,
+  normalizeDeliveryMessage,
+  publicInvoiceContainsSensitiveFields,
+  sanitizePublicInvoicePayload,
+} from "./delivery-validation";
+export {
+  generateDeliveryToken,
+  hashDeliveryToken,
+  isValidDeliveryTokenFormat,
+} from "./delivery-token";
+export { buildPublicInvoiceUrl, getAppBaseUrl } from "./delivery-url";
