@@ -141,7 +141,8 @@ export function InvoiceForm({
       "",
   );
   const [forceDuplicate, setForceDuplicate] = useState(false);
-  const [forceEdit, setForceEdit] = useState(false);
+  const [closedOverrideAcknowledged, setClosedOverrideAcknowledged] = useState(false);
+  const [closedOverrideConfirmed, setClosedOverrideConfirmed] = useState(false);
   const [lineItems, setLineItems] = useState<EditableLineItem[]>(() =>
     initLineItems(invoice, initialDraft),
   );
@@ -196,11 +197,20 @@ export function InvoiceForm({
     }
   }, [router, state.invoiceId, state.success]);
 
+  const isClosedOverrideEligible =
+    isEditing &&
+    invoice &&
+    (invoice.status === "paid" || invoice.status === "void");
+
   const readOnly =
     isEditing &&
     invoice &&
-    (invoice.status === "paid" || invoice.status === "void") &&
-    !forceEdit;
+    invoice.status !== "draft" &&
+    !(
+      isClosedOverrideEligible &&
+      closedOverrideAcknowledged &&
+      closedOverrideConfirmed
+    );
 
   return (
     <form action={formAction} className="space-y-6">
@@ -227,7 +237,9 @@ export function InvoiceForm({
         <input type="hidden" name="appointment_id" value={appointmentId} />
       )}
       <input type="hidden" name="force_duplicate" value={String(forceDuplicate)} />
-      <input type="hidden" name="force_edit" value={String(forceEdit)} />
+      {closedOverrideConfirmed && (
+        <input type="hidden" name="closed_override_ack" value="CONFIRMED" />
+      )}
       <input type="hidden" name="issue_date" value={issueDate} />
       <input type="hidden" name="due_date" value={dueDate} />
       <input
@@ -290,17 +302,27 @@ export function InvoiceForm({
         </div>
       )}
 
-      {isEditing && invoice && (invoice.status === "paid" || invoice.status === "void") && (
+      {isClosedOverrideEligible && (
         <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-sm text-rose-200">
           This invoice is {invoice.status}. Editing may affect financial records.
-          {!forceEdit && (
+          {!closedOverrideAcknowledged && (
             <button
               type="button"
-              onClick={() => setForceEdit(true)}
+              onClick={() => setClosedOverrideAcknowledged(true)}
               className="ml-2 underline"
             >
               Edit anyway
             </button>
+          )}
+          {closedOverrideAcknowledged && !closedOverrideConfirmed && (
+            <label className="mt-2 flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={closedOverrideConfirmed}
+                onChange={(event) => setClosedOverrideConfirmed(event.target.checked)}
+              />
+              I understand this may affect financial records
+            </label>
           )}
         </div>
       )}

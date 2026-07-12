@@ -13,6 +13,7 @@ import { dispatchAutomationEvent } from "@/lib/automation";
 import {
   notifyCustomerCreated,
 } from "@/lib/notifications";
+import { deleteCustomerForBusiness } from "@/lib/customers/delete-customer";
 import { createClient } from "@/lib/supabase/server";
 
 export type CustomerActionState = {
@@ -165,6 +166,12 @@ export async function deleteCustomer(customerId: string): Promise<CustomerAction
 
   if (!customerId) {
     return { error: "Customer not found." };
+  }
+
+  const result = await deleteCustomerForBusiness(supabase, profile.id, customerId);
+
+  if (!result.ok) {
+    return { error: result.error };
   }
 
   revalidateCustomerPaths(customerId);

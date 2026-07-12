@@ -4,7 +4,7 @@ import { InvoiceDetailClient } from "@/app/components/invoices/invoice-detail-cl
 import { InvoiceForm } from "@/app/components/invoices/invoice-form";
 import { getBusinessProfile } from "@/lib/business-profile";
 import { getCustomers } from "@/lib/customers";
-import { getInvoiceById } from "@/lib/invoices";
+import { canRenderInvoiceEditForm, getInvoiceById } from "@/lib/invoices";
 import { createClient } from "@/lib/supabase/server";
 
 function getUserDisplay(user: {
@@ -43,7 +43,7 @@ export default async function InvoiceDetailPage({
   }
 
   const { displayName, initials } = getUserDisplay(user!);
-  const showEdit = edit === "1";
+  const showEdit = canRenderInvoiceEditForm(invoice.status, edit);
 
   const customers =
     showEdit || invoice.status === "draft"

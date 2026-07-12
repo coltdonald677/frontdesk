@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeCommunicationRecord } from "@/lib/security/sanitize-communication-hub";
 import type {
   CommunicationAttachment,
   CustomerCommunication,
@@ -45,7 +46,9 @@ export async function getCustomerCommunications(
   ]);
 
   const normalized = (communications ?? []).map((row) =>
-    normalizeCommunication(row as Record<string, unknown>),
+    sanitizeCommunicationRecord(
+      normalizeCommunication(row as Record<string, unknown>),
+    ),
   );
 
   return {
@@ -72,7 +75,9 @@ export async function getCustomerCommunicationsForTimeline(
   }
 
   return (data ?? []).map((row) =>
-    normalizeCommunication(row as Record<string, unknown>),
+    sanitizeCommunicationRecord(
+      normalizeCommunication(row as Record<string, unknown>),
+    ),
   );
 }
 

@@ -6,8 +6,8 @@ import { getBusinessProfile } from "@/lib/business-profile";
 import {
   inferAttachmentCategory,
   parseDatetimeLocalValue,
-  stripHtml,
 } from "@/lib/communications";
+import { sanitizeCommunicationHtml } from "@/lib/security/sanitize-communication-html";
 import {
   ATTACHMENT_CATEGORIES,
   EMAIL_DIRECTIONS,
@@ -96,19 +96,20 @@ export async function createCommunicationNote(
   const { supabase, profile } = await getBusinessContext();
   const customerId = String(formData.get("customer_id") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
-  const bodyHtml = String(formData.get("body_html") ?? "").trim();
+  const bodyHtmlRaw = String(formData.get("body_html") ?? "").trim();
   const employeeId = parseOptionalEmployeeId(formData);
 
   if (!customerId) {
     return { error: "Customer not found." };
   }
 
-  if (!bodyHtml) {
-    return { error: "Note content is required." };
-  }
-
   if (!(await verifyCustomer(supabase, profile.id, customerId))) {
     return { error: "Customer not found." };
+  }
+
+  const sanitizedBody = sanitizeCommunicationHtml(bodyHtmlRaw);
+  if (!sanitizedBody.ok) {
+    return { error: sanitizedBody.error };
   }
 
   const { data: communication, error: communicationError } = await supabase
@@ -125,19 +126,19 @@ export async function createCommunicationNote(
     .single();
 
   if (communicationError || !communication) {
-    return { error: communicationError?.message ?? "Failed to create note." };
+    return { error: "Failed to create note." };
   }
 
   const { error: noteError } = await supabase
     .from("customer_communication_notes")
     .insert({
       communication_id: communication.id,
-      body_html: bodyHtml,
-      body_text: stripHtml(bodyHtml),
+      body_html: sanitizedBody.html,
+      body_text: sanitizedBody.plainText,
     });
 
   if (noteError) {
-    return { error: noteError.message };
+    return { error: "Failed to save note." };
   }
 
   revalidateCustomer(customerId);
@@ -221,7 +222,7 @@ export async function createCommunicationEmail(
   const fromAddress = String(formData.get("from_address") ?? "").trim();
   const toAddressesRaw = String(formData.get("to_addresses") ?? "").trim();
   const ccAddressesRaw = String(formData.get("cc_addresses") ?? "").trim();
-  const bodyHtml = String(formData.get("body_html") ?? "").trim();
+  const bodyHtmlRaw = String(formData.get("body_html") ?? "").trim();
   const employeeId = parseOptionalEmployeeId(formData);
   const occurredAtRaw = String(formData.get("occurred_at") ?? "").trim();
 
@@ -243,7 +244,15 @@ export async function createCommunicationEmail(
 
   const toAddresses = parseAddressList(toAddressesRaw);
   const ccAddresses = parseAddressList(ccAddressesRaw);
-  const bodyText = stripHtml(bodyHtml);
+
+  let sanitizedEmailBody: { html: string; plainText: string } | null = null;
+  if (bodyHtmlRaw) {
+    const result = sanitizeCommunicationHtml(bodyHtmlRaw);
+    if (!result.ok) {
+      return { error: result.error };
+    }
+    sanitizedEmailBody = { html: result.html, plainText: result.plainText };
+  }
   const occurredAt = occurredAtRaw
     ? parseDatetimeLocalValue(occurredAtRaw)
     : new Date().toISOString();
@@ -274,8 +283,8 @@ export async function createCommunicationEmail(
       from_address: fromAddress,
       to_addresses: toAddresses,
       cc_addresses: ccAddresses,
-      body_html: bodyHtml || null,
-      body_preview: bodyText.slice(0, 500),
+      body_html: sanitizedEmailBody?.html ?? null,
+      body_preview: (sanitizedEmailBody?.plainText ?? "").slice(0, 500),
       provider: "manual",
       sync_status: "local",
       sent_at: direction === "outbound" ? occurredAt : null,

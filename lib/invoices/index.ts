@@ -16,6 +16,10 @@ export type {
   InvoiceDraftFromAppointment,
 } from "./types";
 export {
+  authorizeInvoiceEdit,
+  canRenderInvoiceEditForm,
+} from "./edit-authorization";
+export {
   EDITABLE_STATUSES,
   INVOICE_STATUSES,
   NON_EDITABLE_STATUSES,

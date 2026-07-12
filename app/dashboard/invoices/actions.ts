@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 import { getBusinessProfile } from "@/lib/business-profile";
 import type { CreateInvoiceInput, InvoiceLineItemInput } from "@/lib/invoices";
 import {
+  authorizeInvoiceEdit,
+} from "@/lib/invoices/edit-authorization";
+import {
   buildInvoiceDraftFromAppointment,
   createInvoice,
   duplicateInvoice,
@@ -132,18 +135,37 @@ export async function updateInvoiceAction(
   try {
     const profile = await getBusinessContext();
     const invoiceId = String(formData.get("invoice_id") ?? "");
-    const force = formData.get("force_edit") === "true";
     const input = parseInvoiceInput(formData);
 
     if (!invoiceId) {
       return { error: "Invoice not found." };
     }
 
-    const invoice = await updateInvoice(
-      profile.id,
-      { ...input, id: invoiceId },
-      { force },
-    );
+    const existing = await getInvoiceById(profile.id, invoiceId);
+    if (!existing) {
+      return { error: "Invoice not found." };
+    }
+
+    const authorization = authorizeInvoiceEdit(existing.status);
+    if (!authorization.allowed) {
+      return { error: authorization.error };
+    }
+
+    const acknowledgedClosedEdit =
+      authorization.mode === "closed_override" &&
+      formData.get("closed_override_ack") === "CONFIRMED";
+
+    if (authorization.mode === "closed_override" && !acknowledgedClosedEdit) {
+      return {
+        error:
+          "Confirm that you understand editing a paid or void invoice may affect financial records.",
+      };
+    }
+
+    const invoice = await updateInvoice(profile.id, { ...input, id: invoiceId }, {
+      authorization,
+      acknowledgedClosedEdit,
+    });
     revalidateInvoicePaths(invoice.id, invoice.customer_id);
 
     return {

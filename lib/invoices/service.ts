@@ -10,6 +10,8 @@ import {
   validateLineItems,
 } from "./calculations";
 import { allocateInvoiceNumber } from "./numbering";
+import type { InvoiceEditAuthorization } from "./edit-authorization";
+import { authorizeInvoiceEdit } from "./edit-authorization";
 import type {
   CreateInvoiceInput,
   CustomerInvoiceSummary,
@@ -438,15 +440,32 @@ export async function createInvoice(
 export async function updateInvoice(
   businessProfileId: string,
   input: UpdateInvoiceInput,
-  options?: { force?: boolean },
+  options: {
+    authorization: InvoiceEditAuthorization & { allowed: true };
+    acknowledgedClosedEdit?: boolean;
+  },
 ): Promise<InvoiceWithDetails> {
   const existing = await getInvoiceById(businessProfileId, input.id);
   if (!existing) {
     throw new Error("Invoice not found.");
   }
 
-  if (!options?.force && existing.status !== "draft") {
-    throw new Error("Only draft invoices can be edited.");
+  const authorization = authorizeInvoiceEdit(existing.status);
+  if (!authorization.allowed) {
+    throw new Error(authorization.error);
+  }
+
+  if (authorization.mode !== options.authorization.mode) {
+    throw new Error("This invoice cannot be edited in its current state.");
+  }
+
+  if (
+    authorization.mode === "closed_override" &&
+    !options.acknowledgedClosedEdit
+  ) {
+    throw new Error(
+      "Confirmation required to edit a paid or void invoice.",
+    );
   }
 
   const validationError = validateLineItems(input.line_items);
