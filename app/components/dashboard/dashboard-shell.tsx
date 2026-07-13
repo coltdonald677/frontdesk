@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
+import { PlutoAssistantDrawer } from "@/app/components/brain/pluto-assistant-drawer";
+import { PlutoAssistantProvider } from "@/app/components/brain/pluto-assistant-provider";
 
 type DashboardShellProps = {
   children: React.ReactNode;
@@ -10,7 +12,11 @@ type DashboardShellProps = {
   initials: string;
 };
 
-export function DashboardShell({ children, displayName, initials }: DashboardShellProps) {
+function DashboardShellFrame({
+  children,
+  displayName,
+  initials,
+}: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -32,6 +38,18 @@ export function DashboardShell({ children, displayName, initials }: DashboardShe
           {children}
         </main>
       </div>
+
+      <PlutoAssistantDrawer />
     </div>
+  );
+}
+
+export function DashboardShell(props: DashboardShellProps) {
+  return (
+    <PlutoAssistantProvider>
+      <Suspense fallback={<DashboardShellFrame {...props} />}>
+        <DashboardShellFrame {...props} />
+      </Suspense>
+    </PlutoAssistantProvider>
   );
 }

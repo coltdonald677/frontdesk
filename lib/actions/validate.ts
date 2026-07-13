@@ -1,6 +1,8 @@
 import "server-only";
 
 import { isValidIsoDate } from "@/lib/appointments/datetime";
+import { isValidTimeRange } from "@/lib/appointments/datetime";
+import { CUSTOMER_ACTIVITY_TYPES } from "@/lib/customer-activities/types";
 import { createClient } from "@/lib/supabase/server";
 import type {
   ActionPayload,
@@ -9,6 +11,8 @@ import type {
   AssignEmployeeToTaskPayload,
   CreateCustomerFollowUpPayload,
   CreateInvoicePayload,
+  CreateAppointmentPayload,
+  CreateCustomerNotePayload,
   CreateTaskPayload,
   MarkAppointmentCompletePayload,
   MarkTaskCompletePayload,
@@ -76,6 +80,12 @@ export function validateActionPayload(
       if (!p.appointment_date || !isValidIsoDate(p.appointment_date)) {
         return { valid: false, error: "Valid appointment date is required." };
       }
+      if (!p.start_time || !p.end_time) {
+        return { valid: false, error: "Start and end times are required." };
+      }
+      if (!isValidTimeRange(p.start_time, p.end_time)) {
+        return { valid: false, error: "End time must be after start time." };
+      }
       return { valid: true };
     }
     case "mark_task_complete": {
@@ -116,6 +126,37 @@ export function validateActionPayload(
         if (item.unit_price < 0) {
           return { valid: false, error: "Line item rate cannot be negative." };
         }
+      }
+      return { valid: true };
+    }
+    case "create_appointment": {
+      const p = payload as CreateAppointmentPayload;
+      if (!p.customer_id || !isUuid(p.customer_id)) {
+        return { valid: false, error: "Customer is required." };
+      }
+      if (!p.title?.trim()) return { valid: false, error: "Appointment title is required." };
+      if (!p.appointment_date || !isValidIsoDate(p.appointment_date)) {
+        return { valid: false, error: "Valid appointment date is required." };
+      }
+      if (!p.start_time || !p.end_time) {
+        return { valid: false, error: "Start and end times are required." };
+      }
+      if (!isValidTimeRange(p.start_time, p.end_time)) {
+        return { valid: false, error: "End time must be after start time." };
+      }
+      if (p.employee_id && !isUuid(p.employee_id)) {
+        return { valid: false, error: "Invalid employee reference." };
+      }
+      return { valid: true };
+    }
+    case "create_customer_note": {
+      const p = payload as CreateCustomerNotePayload;
+      if (!p.customer_id || !isUuid(p.customer_id)) {
+        return { valid: false, error: "Customer is required." };
+      }
+      if (!p.content?.trim()) return { valid: false, error: "Note content is required." };
+      if (p.activity_type && !CUSTOMER_ACTIVITY_TYPES.includes(p.activity_type)) {
+        return { valid: false, error: "Invalid activity type." };
       }
       return { valid: true };
     }
@@ -248,6 +289,39 @@ export async function verifyActionOwnership(
         }
       }
 
+      return { valid: true };
+    }
+    case "create_appointment": {
+      const p = action.payload as CreateAppointmentPayload;
+
+      const { data: customer } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("id", p.customer_id)
+        .eq("business_profile_id", businessProfileId)
+        .maybeSingle();
+      if (!customer) return { valid: false, error: "Customer not found." };
+
+      if (p.employee_id) {
+        const { data: employee } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("id", p.employee_id)
+          .eq("business_profile_id", businessProfileId)
+          .maybeSingle();
+        if (!employee) return { valid: false, error: "Employee not found." };
+      }
+      return { valid: true };
+    }
+    case "create_customer_note": {
+      const p = action.payload as CreateCustomerNotePayload;
+      const { data: customer } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("id", p.customer_id)
+        .eq("business_profile_id", businessProfileId)
+        .maybeSingle();
+      if (!customer) return { valid: false, error: "Customer not found." };
       return { valid: true };
     }
     default:

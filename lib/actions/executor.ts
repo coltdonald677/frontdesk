@@ -10,6 +10,8 @@ import type {
   AssignEmployeeToTaskPayload,
   CreateCustomerFollowUpPayload,
   CreateInvoicePayload,
+  CreateAppointmentPayload,
+  CreateCustomerNotePayload,
   CreateTaskPayload,
   MarkAppointmentCompletePayload,
   MarkTaskCompletePayload,
@@ -140,7 +142,11 @@ async function runActionMutation(
       const p = payload as RescheduleAppointmentPayload;
       const { error } = await supabase
         .from("appointments")
-        .update({ appointment_date: p.appointment_date })
+        .update({
+          appointment_date: p.appointment_date,
+          start_time: p.start_time,
+          end_time: p.end_time,
+        })
         .eq("id", p.appointment_id)
         .eq("business_profile_id", businessProfileId);
       if (error) throw new Error(error.message);
@@ -195,6 +201,43 @@ async function runActionMutation(
         message: `Draft invoice ${invoice.invoice_number} created.`,
         createdEntityId: invoice.id,
       };
+    }
+
+    case "create_appointment": {
+      const p = payload as CreateAppointmentPayload;
+      const { data, error } = await supabase
+        .from("appointments")
+        .insert({
+          business_profile_id: businessProfileId,
+          customer_id: p.customer_id,
+          employee_id: p.employee_id ?? null,
+          title: p.title.trim(),
+          notes: p.notes ?? null,
+          appointment_date: p.appointment_date,
+          start_time: p.start_time,
+          end_time: p.end_time,
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      return {
+        success: true,
+        message: `Appointment "${p.title}" created.`,
+        createdEntityId: data.id,
+      };
+    }
+
+    case "create_customer_note": {
+      const p = payload as CreateCustomerNotePayload;
+      const { error } = await supabase.from("customer_activities").insert({
+        business_profile_id: businessProfileId,
+        customer_id: p.customer_id,
+        activity_type: p.activity_type ?? "note",
+        content: p.content.trim(),
+      });
+      if (error) throw new Error(error.message);
+      return { success: true, message: "Customer note created." };
     }
 
     default:

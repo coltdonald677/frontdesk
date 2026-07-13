@@ -26,6 +26,7 @@ import type { Employee } from "@/lib/employees/types";
 import type { BusinessHoursSettings } from "@/lib/business-settings/types";
 import type { BusinessInsight } from "@/lib/insights/business-types";
 import type { PlutoRecommendation } from "@/lib/recommendations";
+import type { OperationalFinding } from "@/lib/brain/deterministic-summaries";
 
 type MissionControlDashboardProps = {
   stats: MissionControlStats;
@@ -41,6 +42,7 @@ type MissionControlDashboardProps = {
     enabled: boolean;
     realAiConfigured: boolean;
   };
+  operationalFindings: OperationalFinding[];
 };
 
 function formatDate() {
@@ -85,6 +87,7 @@ export function MissionControlDashboard({
   proposedActionCount,
   invoiceMetrics,
   brainStatus,
+  operationalFindings,
 }: MissionControlDashboardProps) {
   const today = getTodayIsoDate();
   const scheduleTodayHref = scheduleLink({ date: today });
@@ -111,6 +114,7 @@ export function MissionControlDashboard({
         proposedActionCount={proposedActionCount}
         brainEnabled={brainStatus.enabled}
         realAiConfigured={brainStatus.realAiConfigured}
+        operationalFindings={operationalFindings}
       />
 
       <div className="mb-8">

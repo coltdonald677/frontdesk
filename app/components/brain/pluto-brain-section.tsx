@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { PlutoAssistantPanel } from "@/app/components/brain/pluto-assistant-panel";
 import { BrainSuggestedActionCard } from "@/app/components/brain/brain-suggested-action-card";
+import { usePlutoAssistant } from "@/app/components/brain/pluto-assistant-provider";
 import { refreshBrainBriefingAction } from "@/app/dashboard/brain/actions";
 import type { DailyBriefing } from "@/lib/briefing/types";
 import type { BrainBriefing, BrainResponse } from "@/lib/brain/types";
+import type { OperationalFinding } from "@/lib/brain/deterministic-summaries";
 import type { PlutoRecommendation } from "@/lib/recommendations";
 
 type PlutoBrainSectionProps = {
@@ -15,6 +16,7 @@ type PlutoBrainSectionProps = {
   proposedActionCount: number;
   brainEnabled: boolean;
   realAiConfigured: boolean;
+  operationalFindings: OperationalFinding[];
 };
 
 function formatUpdatedAt(iso?: string) {
@@ -28,7 +30,9 @@ export function PlutoBrainSection({
   proposedActionCount,
   brainEnabled,
   realAiConfigured,
+  operationalFindings,
 }: PlutoBrainSectionProps) {
+  const { open: openAskPluto } = usePlutoAssistant();
   const [briefing, setBriefing] = useState<BrainBriefing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -80,7 +84,7 @@ export function PlutoBrainSection({
               <div>
                 <h2 className="text-sm font-semibold text-white">Pluto Brain</h2>
                 <p className="text-xs text-zinc-500">
-                  AI reasoning over your live operations data
+                  Operational intelligence for your business
                 </p>
               </div>
             </div>
@@ -96,12 +100,25 @@ export function PlutoBrainSection({
             </span>
             <button
               type="button"
+              onClick={openAskPluto}
+              className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-200 transition-colors hover:bg-violet-500/20"
+            >
+              Ask Pluto
+            </button>
+            <button
+              type="button"
               onClick={() => handleRefresh(true)}
               disabled={isPending || !brainEnabled}
               className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-200 transition-colors hover:bg-violet-500/20 disabled:opacity-50"
             >
               {isPending ? "Refreshing…" : "Refresh briefing"}
             </button>
+            <Link
+              href="/dashboard/actions"
+              className="rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-200 transition-colors hover:bg-indigo-500/15"
+            >
+              Action Center
+            </Link>
           </div>
         </div>
       </div>
@@ -131,6 +148,46 @@ export function PlutoBrainSection({
             {activeResponse?.isFallback ? " · development fallback" : ""}
           </p>
         </div>
+
+        {operationalFindings.length > 0 && (
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Live operational findings
+            </h3>
+            <ul className="space-y-2">
+              {operationalFindings.slice(0, 6).map((finding) => (
+                <li
+                  key={finding.id}
+                  className="rounded-lg border border-white/[0.06] bg-zinc-950/30 px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-zinc-200">{finding.title}</p>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
+                        finding.severity === "critical"
+                          ? "bg-rose-500/10 text-rose-300"
+                          : finding.severity === "warning"
+                            ? "bg-amber-500/10 text-amber-300"
+                            : "bg-zinc-500/10 text-zinc-400"
+                      }`}
+                    >
+                      {finding.severity}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500">{finding.detail}</p>
+                  {finding.href && (
+                    <Link
+                      href={finding.href}
+                      className="mt-2 inline-block text-xs font-medium text-indigo-300 hover:text-indigo-200"
+                    >
+                      View record →
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {priorities.length > 0 && (
           <div>
@@ -189,11 +246,9 @@ export function PlutoBrainSection({
 
         {brainEnabled && !briefing && !isPending && (
           <p className="text-sm text-zinc-500">
-            Click Refresh briefing to generate an AI summary. Rule-based insights remain available below.
+            Review live findings below, open Ask Pluto for questions, or refresh the AI briefing when you need a synthesized summary.
           </p>
         )}
-
-        <PlutoAssistantPanel />
       </div>
     </section>
   );

@@ -1,13 +1,17 @@
-import type { BrainContextSnapshot, BrainToolDefinition } from "./types";
+import type { BrainContextSnapshot } from "./types";
+import { getWriteToolDefinitions } from "./tool-registry";
+import { summarizeFindingsForPrompt } from "./deterministic-summaries";
 
 export const BRAIN_SYSTEM_INSTRUCTIONS = `You are Pluto Brain, the operational intelligence layer for a small business management platform.
 
 Rules:
-- Answer ONLY using the provided business context. Do not invent records or IDs.
-- Never claim you executed an action. You may only suggest actions for human approval.
+- Answer ONLY using the provided business context and deterministic findings. Do not invent records or IDs.
+- Never claim you executed an action. You may only suggest actions for human approval in Action Center.
 - Never generate SQL, code, or raw database commands.
 - Keep answers concise, actionable, and specific to this business.
 - When uncertain, say so and set confidence to "low".
+- Suggested write actions must use ONLY the approved action types listed below.
+- Never suggest recording payments, marking invoices paid, voiding records, deleting data, sending invoices, or emailing customers.
 - Return ONLY valid JSON matching the required schema. No markdown fences or prose outside JSON.
 
 Required JSON schema:
@@ -31,67 +35,27 @@ Required JSON schema:
   "dataFreshness": "ISO-8601 timestamp matching context generatedAt"
 }`;
 
-export const BRAIN_TOOL_DEFINITIONS: BrainToolDefinition[] = [
-  {
-    actionType: "create_task",
-    description: "Create an open task for the team",
-    payloadFields: ["title", "description?", "due_date?", "priority?", "customer_id?", "employee_id?"],
-  },
-  {
-    actionType: "assign_employee_to_appointment",
-    description: "Assign an employee to a scheduled appointment",
-    payloadFields: ["appointment_id", "employee_id"],
-  },
-  {
-    actionType: "assign_employee_to_task",
-    description: "Assign an employee to an open task",
-    payloadFields: ["task_id", "employee_id"],
-  },
-  {
-    actionType: "reschedule_appointment",
-    description: "Move an appointment to a new date",
-    payloadFields: ["appointment_id", "appointment_date"],
-  },
-  {
-    actionType: "create_customer_follow_up",
-    description: "Create a follow-up task for a customer",
-    payloadFields: ["customer_id", "title", "description?", "due_date?", "employee_id?"],
-  },
-  {
-    actionType: "mark_task_complete",
-    description: "Mark an open task as completed",
-    payloadFields: ["task_id"],
-  },
-  {
-    actionType: "mark_appointment_complete",
-    description: "Mark a scheduled appointment as completed",
-    payloadFields: ["appointment_id"],
-  },
-  {
-    actionType: "create_invoice",
-    description: "Create a draft invoice (requires line_items)",
-    payloadFields: [
-      "customer_id",
-      "appointment_id?",
-      "issue_date",
-      "due_date?",
-      "line_items[]",
-    ],
-  },
-];
+export const BRAIN_TOOL_DEFINITIONS = getWriteToolDefinitions();
 
 export function buildBrainUserPrompt(
   question: string,
   context: BrainContextSnapshot,
-  tools: BrainToolDefinition[],
+  tools = BRAIN_TOOL_DEFINITIONS,
 ): string {
-  const contextJson = JSON.stringify(context, null, 0);
+  const contextJson = JSON.stringify(
+    {
+      ...context,
+      deterministicFindings: summarizeFindingsForPrompt(context.operationalFindings),
+    },
+    null,
+    0,
+  );
 
   return [
     `Business context (generated ${context.generatedAt}):`,
     contextJson,
     "",
-    "Approved action types:",
+    "Approved write action types (require owner confirmation via Action Center):",
     JSON.stringify(tools),
     "",
     `User question: ${question.trim()}`,
@@ -108,3 +72,25 @@ export const SUGGESTED_BRAIN_QUESTIONS = [
   "Which customers need follow-up?",
   "What scheduling conflicts exist?",
 ] as const;
+
+export type ContextFocus =
+  | "full"
+  | "schedule"
+  | "tasks"
+  | "invoices"
+  | "customers"
+  | "employees"
+  | "communications";
+
+export function detectContextFocus(question: string): ContextFocus {
+  const q = question.toLowerCase();
+  if (q.includes("invoice") || q.includes("overdue") && q.includes("pay")) return "invoices";
+  if (q.includes("task") || q.includes("overdue work")) return "tasks";
+  if (q.includes("schedule") || q.includes("appointment") || q.includes("conflict") || q.includes("today") || q.includes("tomorrow")) {
+    return "schedule";
+  }
+  if (q.includes("customer") || q.includes("follow-up") || q.includes("follow up")) return "customers";
+  if (q.includes("employee") || q.includes("workload") || q.includes("team")) return "employees";
+  if (q.includes("communication") || q.includes("activity") || q.includes("message")) return "communications";
+  return "full";
+}

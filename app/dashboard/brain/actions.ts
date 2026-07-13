@@ -4,12 +4,15 @@ import { revalidatePath } from "next/cache";
 import {
   askPlutoBrain,
   generateBrainBriefing,
-  getBrainStatus,
+  getBrainStatusForBusiness,
   proposeBrainSuggestedAction,
   type BrainBriefing,
   type BrainResponse,
   type BrainSuggestedAction,
 } from "@/lib/brain";
+import type { BrainPageContextHint } from "@/lib/brain/page-context";
+import type { CreateAppointmentPendingIntent } from "@/lib/brain/types";
+import { getBusinessProfile } from "@/lib/business-profile";
 
 export type BrainActionState = {
   error?: string;
@@ -28,15 +31,49 @@ export type BriefingBrainResult = {
   fallbackSummary?: string;
 };
 
+export type AskPlutoBrainActionInput = {
+  question: string;
+  pendingCreateAppointment?: CreateAppointmentPendingIntent;
+  pageContextHint?: BrainPageContextHint;
+};
+
 export async function getBrainStatusAction() {
-  return getBrainStatus();
+  const profile = await getBusinessProfile();
+  if (!profile) {
+    return { enabled: false, realAiConfigured: false, provider: "unavailable", model: "" };
+  }
+  const status = await getBrainStatusForBusiness(profile.id);
+  return {
+    enabled: status.enabled,
+    realAiConfigured: status.realAiConfigured,
+    provider: status.useDevelopmentFallback ? "development-fallback" : "openai-compatible",
+    model: process.env.AI_MODEL ?? "gpt-4o-mini",
+  };
 }
 
-export async function askPlutoBrainAction(question: string): Promise<AskBrainResult> {
-  const result = await askPlutoBrain(question);
+export async function askPlutoBrainAction(
+  input: AskPlutoBrainActionInput | string,
+  legacyPendingCreateAppointment?: CreateAppointmentPendingIntent,
+): Promise<AskBrainResult> {
+  const question =
+    typeof input === "string" ? input : input.question;
+  const pendingCreateAppointment =
+    typeof input === "string"
+      ? legacyPendingCreateAppointment
+      : input.pendingCreateAppointment;
+  const pageContextHint =
+    typeof input === "string" ? undefined : input.pageContextHint;
+
+  const result = await askPlutoBrain(question, {
+    pendingCreateAppointment,
+    pageContextHint,
+  });
 
   if (!result.ok) {
-    return { error: result.error.message };
+    return {
+      error: result.error.message,
+      response: result.fallback,
+    };
   }
 
   return { response: result.result.response };

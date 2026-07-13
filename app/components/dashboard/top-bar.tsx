@@ -3,6 +3,7 @@
 import { LogoutButton } from "./logout-button";
 import { GlobalSearch } from "./global-search";
 import { NotificationCenter } from "./notification-center";
+import { AskPlutoButton } from "@/app/components/brain/pluto-assistant-drawer";
 
 type TopBarProps = {
   onMenuClick: () => void;
@@ -29,6 +30,7 @@ export function TopBar({ onMenuClick, displayName, initials }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
+        <AskPlutoButton />
         <NotificationCenter />
 
         <div className="hidden h-6 w-px bg-white/10 sm:block" />

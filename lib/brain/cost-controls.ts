@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { BrainConfig, BrainContextSnapshot, BrainResponse } from "./types";
+import { getBusinessUsageCountToday, persistBrainUsageLog } from "./usage-log";
+import { hashReadOnlyQuestion } from "./usage-log";
 
 type CacheEntry = {
   response: BrainResponse;
@@ -19,6 +21,7 @@ type CooldownEntry = {
 };
 
 const briefingCache = new Map<string, CacheEntry>();
+const readOnlyQueryCache = new Map<string, CacheEntry>();
 const businessUsage = new Map<string, UsageEntry>();
 const userCooldowns = new Map<string, CooldownEntry>();
 
@@ -113,10 +116,48 @@ export function recordUserRequest(userId: string): void {
   userCooldowns.set(userId, { lastRequestAt: Date.now() });
 }
 
+export function getCachedReadOnlyQuery(
+  businessProfileId: string,
+  questionHash: string,
+  contextHash: string,
+): { response: BrainResponse; topPriorities: string[] } | null {
+  const key = `${businessProfileId}:${questionHash}`;
+  const entry = readOnlyQueryCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    readOnlyQueryCache.delete(key);
+    return null;
+  }
+  if (entry.contextHash !== contextHash) return null;
+  return { response: entry.response, topPriorities: entry.topPriorities };
+}
+
+export function setCachedReadOnlyQuery(
+  businessProfileId: string,
+  questionHash: string,
+  contextHash: string,
+  response: BrainResponse,
+  topPriorities: string[],
+  cacheMinutes: number,
+): void {
+  const key = `${businessProfileId}:${questionHash}`;
+  readOnlyQueryCache.set(key, {
+    response,
+    topPriorities,
+    contextHash,
+    expiresAt: Date.now() + cacheMinutes * 60_000,
+  });
+}
+
 export function checkBusinessDailyLimit(
   businessProfileId: string,
   limit: number,
+  persistedCount?: number | null,
 ): { allowed: true } | { allowed: false } {
+  if (persistedCount !== null && persistedCount !== undefined && persistedCount >= limit) {
+    return { allowed: false };
+  }
+
   const now = Date.now();
   const entry = businessUsage.get(businessProfileId);
 
@@ -128,7 +169,8 @@ export function checkBusinessDailyLimit(
     return { allowed: true };
   }
 
-  return entry.count < limit ? { allowed: true } : { allowed: false };
+  const effectiveCount = Math.max(entry.count, persistedCount ?? 0);
+  return effectiveCount < limit ? { allowed: true } : { allowed: false };
 }
 
 export function recordBusinessUsage(businessProfileId: string): void {
@@ -146,7 +188,7 @@ export function recordBusinessUsage(businessProfileId: string): void {
   entry.count += 1;
 }
 
-export function logBrainUsage(event: {
+export async function logBrainUsage(event: {
   businessProfileId: string;
   userId: string;
   providerId: string;
@@ -154,9 +196,17 @@ export function logBrainUsage(event: {
   success: boolean;
   error?: string;
   fromCache?: boolean;
-}): void {
-  console.info("[pluto-brain]", {
-    at: new Date().toISOString(),
-    ...event,
+  requestType?: "question" | "briefing";
+}): Promise<void> {
+  await persistBrainUsageLog({
+    businessProfileId: event.businessProfileId,
+    userId: event.userId,
+    providerId: event.providerId,
+    requestType: event.requestType ?? "question",
+    success: event.success,
+    fromCache: event.fromCache,
+    errorCode: event.error ?? null,
   });
 }
+
+export { hashReadOnlyQuestion };

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { ActionType } from "@/lib/actions/types";
 import { getActionRiskLevel } from "@/lib/actions/risk";
+import { filterPhase1SuggestedActions } from "./tool-registry";
 import {
   BRAIN_SYSTEM_INSTRUCTIONS,
   buildBrainUserPrompt,
@@ -12,7 +13,9 @@ import type {
   BrainProvider,
   BrainProviderRequest,
   BrainProviderResult,
+  BrainSuggestedAction,
 } from "./types";
+import { buildWriteIntentFallbackResponseAsync, hasWriteIntent } from "./write-intent-parser";
 
 function extractJsonObject(text: string): unknown {
   const trimmed = text.trim();
@@ -165,15 +168,42 @@ export class DevelopmentFallbackProvider implements BrainProvider {
     const input: BrainFallbackInput = {
       question: request.userQuestion,
       context: request.businessContext,
+      pendingCreateAppointment: request.pendingCreateAppointment,
     };
 
-    const rawJson = buildFallbackResponse(input);
+    const rawJson = await buildFallbackResponse(input);
     return { ok: true, rawJson, providerId: this.id, isFallback: true };
   }
 }
 
-export function buildFallbackResponse(input: BrainFallbackInput): Record<string, unknown> {
+export async function buildFallbackResponse(
+  input: BrainFallbackInput,
+): Promise<Record<string, unknown>> {
   const { question, context } = input;
+
+  const writeIntentResponse = await buildWriteIntentFallbackResponseAsync(
+    question,
+    context,
+    { pendingCreateAppointment: input.pendingCreateAppointment },
+  );
+  if (writeIntentResponse) {
+    return writeIntentResponse;
+  }
+
+  if (hasWriteIntent(question)) {
+    return {
+      answer:
+        "I understood you want to make a scheduling change, but I need one more detail before I can propose it.",
+      summary:
+        "I understood you want to make a scheduling change, but I need one more detail before I can propose it.",
+      supportingFacts: [],
+      warnings: [],
+      suggestedActions: [],
+      confidence: "medium",
+      dataFreshness: context.generatedAt,
+    };
+  }
+
   const q = question.toLowerCase();
   const briefing = context.ruleBasedBriefing;
   const warnings: string[] = [];
@@ -261,18 +291,23 @@ export function buildFallbackResponse(input: BrainFallbackInput): Record<string,
     summary: briefing.highestPriority?.text ?? briefing.intro,
     supportingFacts: facts.slice(0, 8),
     warnings,
-    suggestedActions: buildFallbackSuggestedActions(input),
+    suggestedActions: filterPhase1SuggestedActions(
+      buildFallbackSuggestedActions(input) as BrainSuggestedAction[],
+    ),
     confidence: "medium",
     dataFreshness: context.generatedAt,
   };
 }
 
-export function createBrainProvider(): BrainProvider {
+export function createBrainProvider(options?: {
+  forceFallback?: boolean;
+}): BrainProvider {
   const config = getBrainConfig();
   const apiKey = process.env.AI_API_KEY?.trim();
   const useRealProvider =
-    config.provider === "openai" ||
-    (config.provider === "auto" && Boolean(apiKey));
+    !options?.forceFallback &&
+    (config.provider === "openai" ||
+      (config.provider === "auto" && Boolean(apiKey)));
 
   if (useRealProvider && apiKey) {
     return new OpenAiCompatibleProvider(

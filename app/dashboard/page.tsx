@@ -1,6 +1,6 @@
 import { DashboardShell } from "@/app/components/dashboard/dashboard-shell";
 import { MissionControlDashboard } from "@/app/components/dashboard/mission-control-dashboard";
-import { getBrainStatusForBusiness } from "@/lib/brain";
+import { getBrainStatusForBusiness, buildBrainContext } from "@/lib/brain";
 import { getDailyBriefing } from "@/lib/briefing";
 import { getBusinessProfile } from "@/lib/business-profile";
 import { getBusinessHoursForBusiness } from "@/lib/business-settings";
@@ -41,7 +41,7 @@ export default async function DashboardPage() {
   await scanOverdueTaskAutomations(profile!.id);
   await syncOverdueInvoices(profile!.id);
 
-  const [stats, briefing, customers, employees, businessInsights, plutoRecommendations, proposedActionCount, invoiceMetrics, businessHours] =
+  const [stats, briefing, customers, employees, businessInsights, plutoRecommendations, proposedActionCount, invoiceMetrics, businessHours, brainContext] =
     await Promise.all([
     getMissionControlStats(profile!.id),
     getDailyBriefing(profile!.id, displayName),
@@ -52,6 +52,7 @@ export default async function DashboardPage() {
     getProposedActionCount(profile!.id),
     getInvoiceMetrics(profile!.id),
     getBusinessHoursForBusiness(profile!.id),
+    buildBrainContext(profile!.id, displayName),
   ]);
 
   await syncCriticalRecommendationNotifications(
@@ -76,6 +77,7 @@ export default async function DashboardPage() {
         proposedActionCount={proposedActionCount}
         invoiceMetrics={invoiceMetrics}
         brainStatus={brainStatus}
+        operationalFindings={brainContext.operationalFindings}
       />
     </DashboardShell>
   );

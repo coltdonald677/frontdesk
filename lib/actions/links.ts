@@ -19,6 +19,12 @@ export function getActionHref(action: {
         : "/dashboard/customers";
     case "create_invoice":
       return "/dashboard/invoices";
+    case "create_appointment":
+      return "/dashboard/schedule?date=today";
+    case "create_customer_note":
+      return typeof action.payload.customer_id === "string"
+        ? `/dashboard/customers/${action.payload.customer_id}`
+        : "/dashboard/customers";
     default:
       if (action.related_entity_type === "customer" && action.related_entity_id) {
         return `/dashboard/customers/${action.related_entity_id}`;

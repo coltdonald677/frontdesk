@@ -3,7 +3,7 @@
 -- Public access via high-entropy token (SHA-256 hash stored; plain token never persisted).
 -- Review and apply manually in Supabase SQL editor.
 
-create extension if not exists pgcrypto;
+create extension if not exists pgcrypto with schema extensions;
 
 do $$
 begin
@@ -124,7 +124,10 @@ language sql
 immutable
 set search_path = public
 as $$
-  select encode(digest(p_token, 'sha256'), 'hex');
+  select encode(
+    extensions.digest(convert_to(p_token, 'UTF8'), 'sha256'::text),
+    'hex'
+  );
 $$;
 
 revoke all on function public.hash_invoice_delivery_token(text) from public;

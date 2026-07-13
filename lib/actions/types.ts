@@ -18,7 +18,9 @@ export type ActionType =
   | "create_customer_follow_up"
   | "mark_task_complete"
   | "mark_appointment_complete"
-  | "create_invoice";
+  | "create_invoice"
+  | "create_appointment"
+  | "create_customer_note";
 
 export const ACTION_TYPES: ActionType[] = [
   "create_task",
@@ -29,6 +31,8 @@ export const ACTION_TYPES: ActionType[] = [
   "mark_task_complete",
   "mark_appointment_complete",
   "create_invoice",
+  "create_appointment",
+  "create_customer_note",
 ];
 
 export type CreateTaskPayload = {
@@ -53,6 +57,8 @@ export type AssignEmployeeToTaskPayload = {
 export type RescheduleAppointmentPayload = {
   appointment_id: string;
   appointment_date: string;
+  start_time: string;
+  end_time: string;
 };
 
 export type CreateCustomerFollowUpPayload = {
@@ -87,6 +93,22 @@ export type CreateInvoicePayload = {
   }>;
 };
 
+export type CreateAppointmentPayload = {
+  customer_id: string;
+  title: string;
+  appointment_date: string;
+  start_time: string;
+  end_time: string;
+  employee_id?: string | null;
+  notes?: string | null;
+};
+
+export type CreateCustomerNotePayload = {
+  customer_id: string;
+  content: string;
+  activity_type?: "note" | "call" | "email" | "meeting" | "follow_up";
+};
+
 export type ActionPayload =
   | CreateTaskPayload
   | AssignEmployeeToAppointmentPayload
@@ -95,7 +117,9 @@ export type ActionPayload =
   | CreateCustomerFollowUpPayload
   | MarkTaskCompletePayload
   | MarkAppointmentCompletePayload
-  | CreateInvoicePayload;
+  | CreateInvoicePayload
+  | CreateAppointmentPayload
+  | CreateCustomerNotePayload;
 
 export type PlutoAction = {
   id: string;
@@ -110,6 +134,7 @@ export type PlutoAction = {
   related_entity_id: string | null;
   source: ActionSource;
   recommendation_id: string | null;
+  idempotency_key: string | null;
   result_message: string | null;
   error_message: string | null;
   created_at: string;
@@ -128,6 +153,7 @@ export type ProposedPlutoAction = {
   relatedEntityId?: string | null;
   source?: ActionSource;
   recommendationId?: string | null;
+  idempotencyKey?: string | null;
 };
 
 export type ActionExecutionResult = {

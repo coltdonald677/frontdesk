@@ -23,6 +23,8 @@ import {
 } from "@/lib/business-settings";
 import { getBrainConfig } from "./cost-controls";
 import type { BrainContextSnapshot } from "./types";
+import { computeOperationalFindings } from "./deterministic-summaries";
+import type { ContextFocus } from "./prompts";
 
 function truncate(text: string, max = 120): string {
   if (text.length <= max) return text;
@@ -31,6 +33,83 @@ function truncate(text: string, max = 120): string {
 
 function formatTime(start: string, end: string): string {
   return `${start.slice(0, 5)}–${end.slice(0, 5)}`;
+}
+
+function mapBrainAppointment(
+  appointment: {
+    id: string;
+    title: string;
+    appointment_date: string;
+    start_time: string;
+    end_time: string;
+    customer_id: string;
+    employee_id: string | null;
+    notes?: string | null;
+    status: string;
+    customers?: { name?: string | null; company?: string | null } | null;
+    employees?: { full_name?: string | null } | null;
+  },
+) {
+  return {
+    id: appointment.id,
+    title: appointment.title,
+    date: appointment.appointment_date,
+    time: formatTime(appointment.start_time, appointment.end_time),
+    startTime: appointment.start_time.slice(0, 5),
+    endTime: appointment.end_time.slice(0, 5),
+    customer:
+      appointment.customers?.company ||
+      appointment.customers?.name ||
+      "Customer",
+    customerId: appointment.customer_id,
+    employee: appointment.employees?.full_name ?? null,
+    employeeId: appointment.employee_id,
+    notes: appointment.notes ?? null,
+    status: appointment.status,
+  };
+}
+
+function buildCustomerDirectory(
+  recContext: Awaited<ReturnType<typeof loadRecommendationContext>>,
+): Array<{ id: string; name: string; company: string | null }> {
+  const seen = new Map<string, { id: string; name: string; company: string | null }>();
+
+  function upsertCustomer(
+    id: string,
+    name: string,
+    company: string | null,
+  ) {
+    const existing = seen.get(id);
+    if (!existing) {
+      seen.set(id, { id, name, company });
+      return;
+    }
+
+    seen.set(id, {
+      id,
+      name: existing.name || name,
+      company: existing.company ?? company,
+    });
+  }
+
+  for (const customer of recContext.inactiveCustomers) {
+    upsertCustomer(customer.id, customer.name, customer.company);
+  }
+
+  for (const appointment of [
+    ...recContext.todayAppointments,
+    ...recContext.tomorrowAppointments,
+    ...recContext.upcomingAppointments,
+  ]) {
+    if (!appointment.customer_id) continue;
+    upsertCustomer(
+      appointment.customer_id,
+      appointment.customers?.name ?? "Customer",
+      appointment.customers?.company ?? null,
+    );
+  }
+
+  return Array.from(seen.values());
 }
 
 function detectSchedulingConflicts(
@@ -81,6 +160,7 @@ function detectSchedulingConflicts(
 export async function buildBrainContext(
   businessProfileId: string,
   displayName: string,
+  focus: ContextFocus = "full",
 ): Promise<BrainContextSnapshot> {
   const config = getBrainConfig();
   const limit = config.maxContextRecords;
@@ -120,7 +200,7 @@ export async function buildBrainContext(
     getUnreadNotificationCount(businessProfileId),
     getProposedActionCount(businessProfileId),
     getCustomerCount(businessProfileId),
-    getEmployees(businessProfileId),
+    getEmployees(businessProfileId, { includeInactive: true }),
     loadBusinessSettings(),
   ]);
 
@@ -133,7 +213,14 @@ export async function buildBrainContext(
 
   const tomorrowAppointments = recContext.tomorrowAppointments.slice(0, 10);
 
-  return {
+  const customerDirectory = buildCustomerDirectory(recContext);
+  const employeeDirectory = employees.map((employee) => ({
+    id: employee.id,
+    name: employee.full_name,
+    status: employee.status,
+  }));
+
+  const snapshot: BrainContextSnapshot = {
     businessProfileId,
     businessName: profile?.business_name ?? "Your business",
     generatedAt: new Date().toISOString(),
@@ -156,29 +243,16 @@ export async function buildBrainContext(
       proposedActions: proposedActionCount,
       unreadNotifications,
     },
-    todayAppointments: recContext.todayAppointments.slice(0, 12).map((appointment) => ({
-      id: appointment.id,
-      title: appointment.title,
-      date: appointment.appointment_date,
-      time: formatTime(appointment.start_time, appointment.end_time),
-      customer:
-        appointment.customers?.company ||
-        appointment.customers?.name ||
-        "Customer",
-      employee: appointment.employees?.full_name ?? null,
-      status: appointment.status,
-    })),
-    tomorrowAppointments: tomorrowAppointments.map((appointment) => ({
-      id: appointment.id,
-      title: appointment.title,
-      date: appointment.appointment_date,
-      time: formatTime(appointment.start_time, appointment.end_time),
-      customer:
-        appointment.customers?.company ||
-        appointment.customers?.name ||
-        "Customer",
-      employee: appointment.employees?.full_name ?? null,
-    })),
+    todayAppointments: recContext.todayAppointments
+      .slice(0, 12)
+      .map((appointment) => mapBrainAppointment(appointment)),
+    tomorrowAppointments: tomorrowAppointments.map((appointment) =>
+      mapBrainAppointment(appointment),
+    ),
+    schedulableAppointments: recContext.upcomingAppointments
+      .filter((appointment) => appointment.status === "scheduled")
+      .slice(0, 60)
+      .map((appointment) => mapBrainAppointment(appointment)),
     overdueTasks: overdueTasks.map((task) => ({
       id: task.id,
       title: task.title,
@@ -193,6 +267,8 @@ export async function buildBrainContext(
       appointmentsToday: entry.appointmentsToday,
       openTasks: entry.openTasks,
     })),
+    customerDirectory,
+    employeeDirectory,
     schedulingConflicts,
     inactiveCustomers: recContext.inactiveCustomers.slice(0, 8).map((customer) => ({
       id: customer.id,
@@ -246,5 +322,46 @@ export async function buildBrainContext(
     ruleBasedBriefing,
     topRecommendations: recommendations.slice(0, 3),
     businessOperatingSettings: summarizeBusinessSettingsForBrain(businessSettings),
+    operationalFindings: [],
+    contextFocus: focus,
   };
+
+  snapshot.operationalFindings = computeOperationalFindings(snapshot);
+
+  return applyContextFocus(snapshot, focus);
+}
+
+function applyContextFocus(
+  snapshot: BrainContextSnapshot,
+  focus: ContextFocus,
+): BrainContextSnapshot {
+  if (focus === "full") return snapshot;
+
+  const minimal = {
+    ...snapshot,
+    todayAppointments: focus === "schedule" ? snapshot.todayAppointments : snapshot.todayAppointments.slice(0, 3),
+    tomorrowAppointments: focus === "schedule" ? snapshot.tomorrowAppointments : [],
+    overdueTasks: focus === "tasks" ? snapshot.overdueTasks : snapshot.overdueTasks.slice(0, 3),
+    employeeWorkloads: focus === "employees" ? snapshot.employeeWorkloads : snapshot.employeeWorkloads.slice(0, 4),
+    schedulingConflicts: focus === "schedule" ? snapshot.schedulingConflicts : [],
+    inactiveCustomers: focus === "customers" ? snapshot.inactiveCustomers : snapshot.inactiveCustomers.slice(0, 3),
+    overdueInvoices: focus === "invoices" ? snapshot.overdueInvoices : snapshot.overdueInvoices.slice(0, 3),
+    outstandingInvoices: focus === "invoices" ? snapshot.outstandingInvoices : [],
+    recentActivities: focus === "communications" ? snapshot.recentActivities : snapshot.recentActivities.slice(0, 3),
+    recommendations: snapshot.recommendations.slice(0, 4),
+    proposedActions: snapshot.proposedActions.slice(0, 3),
+    recentCompletedActions: [],
+    recentNotifications: snapshot.recentNotifications.slice(0, 3),
+    operationalFindings: snapshot.operationalFindings.filter((finding) => {
+      if (focus === "schedule") return finding.category === "schedule";
+      if (focus === "tasks") return finding.category === "tasks";
+      if (focus === "invoices") return finding.category === "invoices";
+      if (focus === "customers") return finding.category === "customers" || finding.category === "communications";
+      if (focus === "employees") return finding.category === "workload";
+      if (focus === "communications") return finding.category === "communications";
+      return true;
+    }),
+  };
+
+  return minimal;
 }

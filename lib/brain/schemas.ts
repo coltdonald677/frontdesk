@@ -1,8 +1,12 @@
 import { ACTION_TYPES, type ActionPayload, type ActionType } from "@/lib/actions/types";
+import { getActionRiskLevel } from "@/lib/actions/risk";
+import { filterPhase1SuggestedActions } from "./tool-registry";
 import type {
+  BrainActionDisplayField,
   BrainConfidence,
   BrainResponse,
   BrainSuggestedAction,
+  CreateAppointmentPendingIntent,
 } from "./types";
 
 const CONFIDENCE_VALUES: BrainConfidence[] = ["low", "medium", "high"];
@@ -27,6 +31,50 @@ function asStringArray(value: unknown): string[] {
     .slice(0, 12);
 }
 
+function parseDisplayFields(value: unknown): BrainActionDisplayField[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const fields = value
+    .map((entry): BrainActionDisplayField | null => {
+      if (!isRecord(entry)) return null;
+      const label = asString(entry.label, "label");
+      const fieldValue = asString(entry.value, "value");
+      if (!label || !fieldValue) return null;
+
+      const field: BrainActionDisplayField = { label, value: fieldValue };
+      if (typeof entry.href === "string" && entry.href.trim()) {
+        field.href = entry.href.trim();
+      }
+      return field;
+    })
+    .filter((field): field is BrainActionDisplayField => field !== null);
+
+  return fields.length > 0 ? fields : undefined;
+}
+
+function parsePendingCreateAppointment(
+  value: unknown,
+): CreateAppointmentPendingIntent | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const stringOrNull = (field: unknown): string | null =>
+    typeof field === "string" && field.trim() ? field.trim() : null;
+
+  const numberOrNull = (field: unknown): number | null =>
+    typeof field === "number" && field > 0 ? field : null;
+
+  return {
+    datePhrase: stringOrNull(value.datePhrase),
+    appointmentDate: stringOrNull(value.appointmentDate),
+    timePhrase: stringOrNull(value.timePhrase),
+    startTime: stringOrNull(value.startTime),
+    endTime: stringOrNull(value.endTime),
+    durationMinutes: numberOrNull(value.durationMinutes),
+    employeeId: stringOrNull(value.employeeId),
+    employeeName: stringOrNull(value.employeeName),
+  };
+}
+
 function parseSuggestedAction(value: unknown): BrainSuggestedAction | null {
   if (!isRecord(value)) return null;
 
@@ -49,6 +97,9 @@ function parseSuggestedAction(value: unknown): BrainSuggestedAction | null {
 
   if (!isRecord(value.payload)) return null;
 
+  const payloadValidation = validateSuggestedPayload(actionType as ActionType, value.payload);
+  if (!payloadValidation.valid) return null;
+
   const relatedEntityType =
     typeof value.relatedEntityType === "string" ? value.relatedEntityType : null;
   const relatedEntityId =
@@ -58,11 +109,60 @@ function parseSuggestedAction(value: unknown): BrainSuggestedAction | null {
     actionType: actionType as ActionType,
     title,
     explanation,
-    riskLevel: riskLevel as BrainSuggestedAction["riskLevel"],
+    riskLevel: getActionRiskLevel(actionType as ActionType),
     payload: value.payload as ActionPayload,
     relatedEntityType,
     relatedEntityId,
+    displayFields: parseDisplayFields(value.displayFields),
   };
+}
+
+function validateSuggestedPayload(
+  actionType: ActionType,
+  payload: Record<string, unknown>,
+): { valid: true } | { valid: false } {
+  switch (actionType) {
+    case "create_task":
+      return typeof payload.title === "string" && payload.title.trim() ? { valid: true } : { valid: false };
+    case "mark_task_complete":
+      return typeof payload.task_id === "string" ? { valid: true } : { valid: false };
+    case "assign_employee_to_appointment":
+      return typeof payload.appointment_id === "string" && typeof payload.employee_id === "string"
+        ? { valid: true }
+        : { valid: false };
+    case "reschedule_appointment":
+      return typeof payload.appointment_id === "string" &&
+        typeof payload.appointment_date === "string" &&
+        typeof payload.start_time === "string" &&
+        typeof payload.end_time === "string"
+        ? { valid: true }
+        : { valid: false };
+    case "create_customer_follow_up":
+      return typeof payload.customer_id === "string" && typeof payload.title === "string"
+        ? { valid: true }
+        : { valid: false };
+    case "create_invoice":
+      return typeof payload.customer_id === "string" &&
+        typeof payload.issue_date === "string" &&
+        Array.isArray(payload.line_items) &&
+        payload.line_items.length > 0
+        ? { valid: true }
+        : { valid: false };
+    case "create_appointment":
+      return typeof payload.customer_id === "string" &&
+        typeof payload.title === "string" &&
+        typeof payload.appointment_date === "string" &&
+        typeof payload.start_time === "string" &&
+        typeof payload.end_time === "string"
+        ? { valid: true }
+        : { valid: false };
+    case "create_customer_note":
+      return typeof payload.customer_id === "string" && typeof payload.content === "string"
+        ? { valid: true }
+        : { valid: false };
+    default:
+      return { valid: false };
+  }
 }
 
 export function validateBrainResponse(
@@ -92,10 +192,11 @@ export function validateBrainResponse(
     asString(raw.dataFreshness, "dataFreshness") ?? new Date().toISOString();
 
   const suggestedActions = Array.isArray(raw.suggestedActions)
-    ? raw.suggestedActions
-        .map(parseSuggestedAction)
-        .filter((action): action is BrainSuggestedAction => action !== null)
-        .slice(0, 5)
+    ? filterPhase1SuggestedActions(
+        raw.suggestedActions
+          .map(parseSuggestedAction)
+          .filter((action): action is BrainSuggestedAction => action !== null),
+      )
     : [];
 
   const response: BrainResponse = {
@@ -108,6 +209,7 @@ export function validateBrainResponse(
     dataFreshness,
     providerId,
     isFallback,
+    pendingCreateAppointment: parsePendingCreateAppointment(raw.pendingCreateAppointment),
   };
 
   return { valid: true, response };

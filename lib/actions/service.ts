@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { getActionRiskLevel } from "./risk";
 import {
@@ -47,11 +48,22 @@ function mapRow(row: Record<string, unknown>): PlutoAction {
   return row as unknown as PlutoAction;
 }
 
+function buildIdempotencyKey(input: ProposedPlutoAction): string {
+  const raw = [
+    input.businessProfileId,
+    input.actionType,
+    input.relatedEntityId ?? "",
+    JSON.stringify(input.payload),
+  ].join(":");
+  return createHash("sha256").update(raw, "utf8").digest("hex");
+}
+
 export async function proposeAction(
   input: ProposedPlutoAction,
 ): Promise<PlutoAction | null> {
   const supabase = await createClient();
   const riskLevel = input.riskLevel ?? getActionRiskLevel(input.actionType);
+  const idempotencyKey = input.idempotencyKey ?? buildIdempotencyKey(input);
 
   const isDuplicate = await findDuplicateProposedAction(
     input.businessProfileId,
@@ -61,6 +73,18 @@ export async function proposeAction(
   );
 
   if (isDuplicate) {
+    return null;
+  }
+
+  const { data: existingByKey } = await supabase
+    .from("pluto_actions")
+    .select("id")
+    .eq("business_profile_id", input.businessProfileId)
+    .eq("idempotency_key", idempotencyKey)
+    .in("status", ["proposed", "approved", "executing", "completed"])
+    .maybeSingle();
+
+  if (existingByKey) {
     return null;
   }
 
@@ -78,6 +102,7 @@ export async function proposeAction(
       related_entity_id: input.relatedEntityId ?? null,
       source: input.source ?? "recommendation",
       recommendation_id: input.recommendationId ?? null,
+      idempotency_key: idempotencyKey,
     })
     .select("*")
     .single();

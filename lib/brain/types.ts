@@ -5,8 +5,15 @@ import type {
 } from "@/lib/actions/types";
 import type { DailyBriefing } from "@/lib/briefing/types";
 import type { PlutoRecommendation } from "@/lib/recommendations";
+import type { OperationalFinding } from "./deterministic-summaries";
 
 export type BrainConfidence = "low" | "medium" | "high";
+
+export type BrainActionDisplayField = {
+  label: string;
+  value: string;
+  href?: string;
+};
 
 export type BrainSuggestedAction = {
   actionType: ActionType;
@@ -16,6 +23,18 @@ export type BrainSuggestedAction = {
   payload: ActionPayload;
   relatedEntityType?: string | null;
   relatedEntityId?: string | null;
+  displayFields?: BrainActionDisplayField[];
+};
+
+export type CreateAppointmentPendingIntent = {
+  datePhrase: string | null;
+  appointmentDate: string | null;
+  timePhrase: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  durationMinutes: number | null;
+  employeeId: string | null;
+  employeeName: string | null;
 };
 
 export type BrainResponse = {
@@ -28,6 +47,7 @@ export type BrainResponse = {
   dataFreshness: string;
   providerId: string;
   isFallback: boolean;
+  pendingCreateAppointment?: CreateAppointmentPendingIntent;
 };
 
 export type BrainBriefing = {
@@ -42,6 +62,15 @@ export type BrainAskResult = {
   proposedActionIds: string[];
   error?: string;
 };
+
+export type WriteIntentResult =
+  | { kind: "none" }
+  | {
+      kind: "clarification";
+      question: string;
+      pendingCreateAppointment?: CreateAppointmentPendingIntent;
+    }
+  | { kind: "action"; suggestedAction: BrainSuggestedAction; warnings?: string[] };
 
 export type BrainErrorCode =
   | "ai_disabled"
@@ -84,8 +113,13 @@ export type BrainContextSnapshot = {
     title: string;
     date: string;
     time: string;
+    startTime: string;
+    endTime: string;
     customer: string;
+    customerId: string;
     employee: string | null;
+    employeeId: string | null;
+    notes: string | null;
     status: string;
   }>;
   tomorrowAppointments: Array<{
@@ -93,8 +127,28 @@ export type BrainContextSnapshot = {
     title: string;
     date: string;
     time: string;
+    startTime: string;
+    endTime: string;
     customer: string;
+    customerId: string;
     employee: string | null;
+    employeeId: string | null;
+    notes: string | null;
+    status: string;
+  }>;
+  schedulableAppointments: Array<{
+    id: string;
+    title: string;
+    date: string;
+    time: string;
+    startTime: string;
+    endTime: string;
+    customer: string;
+    customerId: string;
+    employee: string | null;
+    employeeId: string | null;
+    notes: string | null;
+    status: string;
   }>;
   overdueTasks: Array<{
     id: string;
@@ -110,6 +164,8 @@ export type BrainContextSnapshot = {
     appointmentsToday: number;
     openTasks: number;
   }>;
+  customerDirectory: Array<{ id: string; name: string; company: string | null }>;
+  employeeDirectory: Array<{ id: string; name: string; status: string }>;
   schedulingConflicts: Array<{
     employee: string;
     appointmentA: string;
@@ -163,6 +219,8 @@ export type BrainContextSnapshot = {
   ruleBasedBriefing: DailyBriefing;
   topRecommendations: PlutoRecommendation[];
   businessOperatingSettings: Record<string, unknown>;
+  operationalFindings: OperationalFinding[];
+  contextFocus: string;
 };
 
 export type BrainToolDefinition = {
@@ -177,6 +235,7 @@ export type BrainProviderRequest = {
   userQuestion: string;
   toolDefinitions: BrainToolDefinition[];
   maxOutputTokens: number;
+  pendingCreateAppointment?: CreateAppointmentPendingIntent;
 };
 
 export type BrainProviderResult =
@@ -203,4 +262,5 @@ export type BrainConfig = {
 export type BrainFallbackInput = {
   question: string;
   context: BrainContextSnapshot;
+  pendingCreateAppointment?: CreateAppointmentPendingIntent;
 };
