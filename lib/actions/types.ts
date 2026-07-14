@@ -20,7 +20,11 @@ export type ActionType =
   | "mark_appointment_complete"
   | "create_invoice"
   | "create_appointment"
-  | "create_customer_note";
+  | "create_customer_note"
+  | "create_employee_shift"
+  | "create_internal_schedule_entry"
+  | "create_time_off"
+  | "create_multi_day_assignment";
 
 export const ACTION_TYPES: ActionType[] = [
   "create_task",
@@ -33,6 +37,10 @@ export const ACTION_TYPES: ActionType[] = [
   "create_invoice",
   "create_appointment",
   "create_customer_note",
+  "create_employee_shift",
+  "create_internal_schedule_entry",
+  "create_time_off",
+  "create_multi_day_assignment",
 ];
 
 export type CreateTaskPayload = {
@@ -109,6 +117,85 @@ export type CreateCustomerNotePayload = {
   activity_type?: "note" | "call" | "email" | "meeting" | "follow_up";
 };
 
+export type CreateEmployeeShiftPayload = {
+  employee_ids: string[];
+  title: string;
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
+  description?: string | null;
+  site_location?: string | null;
+  timezone?: string;
+};
+
+export type CreateInternalScheduleEntryPayload = {
+  employee_ids: string[];
+  entry_type: "internal_work" | "meeting" | "training" | "maintenance";
+  title: string;
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
+  description?: string | null;
+  site_location?: string | null;
+  timezone?: string;
+};
+
+export type CreateTimeOffPayload = {
+  employee_ids: string[];
+  title: string;
+  start_date: string;
+  end_date: string;
+  all_day?: boolean;
+  start_time?: string | null;
+  end_time?: string | null;
+  description?: string | null;
+  timezone?: string;
+  proposed_resolution?:
+    | "remove_entry"
+    | "remove_this_occurrence"
+    | "remove_this_and_future"
+    | "keep_both"
+    | "cancel_time_off"
+    | "reassign_employee"
+    | "leave_unassigned"
+    | "keep_assignment";
+  conflict_resolutions?: Array<{
+    conflictId: string;
+    action:
+      | "remove_entry"
+      | "remove_this_occurrence"
+      | "remove_this_and_future"
+      | "keep_both"
+      | "cancel_time_off"
+      | "reassign_employee"
+      | "leave_unassigned"
+      | "keep_assignment";
+    reassignEmployeeId?: string | null;
+  }>;
+};
+
+export type CreateMultiDayAssignmentPayload = {
+  employee_ids: string[];
+  title: string;
+  start_date: string;
+  end_date: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  all_day?: boolean;
+  customer_id?: string | null;
+  site_location?: string | null;
+  description?: string | null;
+  timezone?: string;
+  included_dates?: string[];
+  entry_count?: number;
+  hours_per_day?: number;
+  total_hours?: number;
+  include_weekends?: boolean;
+  series_days_of_week?: number[];
+};
+
 export type ActionPayload =
   | CreateTaskPayload
   | AssignEmployeeToAppointmentPayload
@@ -119,7 +206,11 @@ export type ActionPayload =
   | MarkAppointmentCompletePayload
   | CreateInvoicePayload
   | CreateAppointmentPayload
-  | CreateCustomerNotePayload;
+  | CreateCustomerNotePayload
+  | CreateEmployeeShiftPayload
+  | CreateInternalScheduleEntryPayload
+  | CreateTimeOffPayload
+  | CreateMultiDayAssignmentPayload;
 
 export type PlutoAction = {
   id: string;

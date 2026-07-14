@@ -9,6 +9,7 @@ import type { DailyBriefing } from "@/lib/briefing/types";
 import type { BrainBriefing, BrainResponse } from "@/lib/brain/types";
 import type { OperationalFinding } from "@/lib/brain/deterministic-summaries";
 import type { PlutoRecommendation } from "@/lib/recommendations";
+import { anyTruthy, booleanProp } from "@/lib/brain/pluto-assistant-state";
 
 type PlutoBrainSectionProps = {
   fallbackBriefing: DailyBriefing;
@@ -108,7 +109,7 @@ export function PlutoBrainSection({
             <button
               type="button"
               onClick={() => handleRefresh(true)}
-              disabled={isPending || !brainEnabled}
+              disabled={booleanProp(anyTruthy(isPending, !brainEnabled))}
               className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-200 transition-colors hover:bg-violet-500/20 disabled:opacity-50"
             >
               {isPending ? "Refreshing…" : "Refresh briefing"}

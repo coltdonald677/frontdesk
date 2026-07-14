@@ -5,6 +5,11 @@ import type {
 } from "@/lib/actions/types";
 import type { DailyBriefing } from "@/lib/briefing/types";
 import type { PlutoRecommendation } from "@/lib/recommendations";
+import type {
+  EntitySuggestion,
+  PendingEntityClarification,
+  ResolvedEntityOverride,
+} from "./pending-entity-clarification";
 import type { OperationalFinding } from "./deterministic-summaries";
 
 export type BrainConfidence = "low" | "medium" | "high";
@@ -48,6 +53,9 @@ export type BrainResponse = {
   providerId: string;
   isFallback: boolean;
   pendingCreateAppointment?: CreateAppointmentPendingIntent;
+  pendingMultiDayAssignment?: MultiDayAssignmentPendingIntent;
+  entitySuggestions?: EntitySuggestion[];
+  pendingEntityClarification?: PendingEntityClarification;
 };
 
 export type BrainBriefing = {
@@ -63,12 +71,41 @@ export type BrainAskResult = {
   error?: string;
 };
 
+export type MultiDayAssignmentPendingIntent = {
+  employeeReference: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  customerReference: string | null;
+  customerId: string | null;
+  customerName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  siteLocation: string | null;
+  includeWeekends: boolean | null;
+};
+
+export type WriteIntentParseOptions = {
+  originalQuestion?: string;
+  resolvedEntityOverrides?: ResolvedEntityOverride[];
+  pendingCreateAppointment?: CreateAppointmentPendingIntent;
+  pendingMultiDayAssignment?: MultiDayAssignmentPendingIntent;
+  pendingEntityClarification?: PendingEntityClarification;
+  pageContext?: import("./page-context").ValidatedBrainPageContext | null;
+  liveInvoiceDirectory?: import("./entity-live-lookup").InvoiceLookupRecord[];
+  liveScheduleEntryDirectory?: import("./entity-live-lookup").ScheduleEntryLookupRecord[];
+};
+
 export type WriteIntentResult =
   | { kind: "none" }
   | {
       kind: "clarification";
       question: string;
+      entitySuggestions?: EntitySuggestion[];
+      pendingEntityClarification?: PendingEntityClarification;
       pendingCreateAppointment?: CreateAppointmentPendingIntent;
+      pendingMultiDayAssignment?: MultiDayAssignmentPendingIntent;
     }
   | { kind: "action"; suggestedAction: BrainSuggestedAction; warnings?: string[] };
 
@@ -236,6 +273,10 @@ export type BrainProviderRequest = {
   toolDefinitions: BrainToolDefinition[];
   maxOutputTokens: number;
   pendingCreateAppointment?: CreateAppointmentPendingIntent;
+  pendingMultiDayAssignment?: MultiDayAssignmentPendingIntent;
+  pendingEntityClarification?: PendingEntityClarification;
+  resolvedEntityOverrides?: ResolvedEntityOverride[];
+  pageContext?: import("./page-context").ValidatedBrainPageContext | null;
 };
 
 export type BrainProviderResult =
@@ -263,4 +304,8 @@ export type BrainFallbackInput = {
   question: string;
   context: BrainContextSnapshot;
   pendingCreateAppointment?: CreateAppointmentPendingIntent;
+  pendingMultiDayAssignment?: MultiDayAssignmentPendingIntent;
+  pendingEntityClarification?: PendingEntityClarification;
+  resolvedEntityOverrides?: ResolvedEntityOverride[];
+  pageContext?: import("./page-context").ValidatedBrainPageContext | null;
 };

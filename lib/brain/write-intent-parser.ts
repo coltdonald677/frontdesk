@@ -20,11 +20,29 @@ import {
   resolveCreateAppointmentIntent,
 } from "./create-appointment-parser";
 import {
+  parseEmployeeShiftRequest,
+  parseInternalScheduleRequest,
+  parseMultiDayAssignmentRequest,
+  parseTimeOffRequest,
+} from "./schedule-entry-parser";
+import {
+  extractAssignmentDateRange,
+  isLikelyMultiDayFollowUpAnswer,
+  isMultiDayAssignmentIntent,
+  resolveMultiDayAssignmentFromPending,
+  resolveMultiDayAssignmentIntent,
+} from "./multi-day-assignment-parser";
+import {
   isRescheduleAppointmentIntent,
   parseRescheduleAppointmentRequest,
   resolveRescheduleAppointmentIntent,
 } from "./reschedule-appointment-parser";
 import { filterPhase1SuggestedActions } from "./tool-registry";
+import {
+  resolveCustomerForWriteIntent,
+  resolveEmployeeForWriteIntent,
+  resolveTaskForWriteIntent,
+} from "./entity-suggestion-service";
 import {
   addDaysToIsoDateInTimezone,
   getTodayIsoDateInTimezone,
@@ -34,6 +52,8 @@ import type {
   BrainContextSnapshot,
   BrainSuggestedAction,
   CreateAppointmentPendingIntent,
+  MultiDayAssignmentPendingIntent,
+  WriteIntentParseOptions,
   WriteIntentResult,
 } from "./types";
 
@@ -50,6 +70,11 @@ const WRITE_INTENT_PATTERNS = [
   /\b(create|draft)\s+(a\s+)?invoice\b/i,
   /\b(create|schedule)\s+(a\s+)?follow[- ]?up\b/i,
   /\bfollow[- ]?up\s+with\b/i,
+  /\bschedule\b.+\bshift\b/i,
+  /\b(time off|vacation|sick time|pto)\b/i,
+  /\b(internal|office work|administration|management duties)\b/i,
+  /\bschedule\b.+\b(?:manager|employee)\b/i,
+  /\bassign\b.+\bto\b.+\bfrom\s+(?:[A-Za-z]+\s+\d{1,2}|\d{4}-\d{2}-\d{2})\b/i,
 ];
 
 export function hasWriteIntent(question: string): boolean {
@@ -266,6 +291,7 @@ function parseCreateTask(question: string, context: BrainContextSnapshot): Write
 function parseMarkTaskComplete(
   question: string,
   context: BrainContextSnapshot,
+  writeOptions?: WriteIntentParseOptions,
 ): WriteIntentResult {
   if (!/\b(mark|complete|finish)\s+(the\s+)?task\b/i.test(question)) {
     return { kind: "none" };
@@ -274,15 +300,37 @@ function parseMarkTaskComplete(
   const titleMatch = question.match(/\btask\s+(.+?)(?:\s+complete|\s+as\s+complete|$)/i);
   const namedMatch = question.match(/\b(?:called|named|titled)\s+(.+)$/i);
   const reference = titleMatch?.[1] ?? namedMatch?.[1] ?? null;
-  const task = reference ? resolveTaskByReference(reference, context) : context.overdueTasks[0] ?? null;
 
-  if (!task) {
+  if (!reference) {
+    const fallback = context.overdueTasks[0] ?? null;
+    if (!fallback) {
+      return {
+        kind: "clarification",
+        question: "Which task should be marked complete? Include the task title.",
+      };
+    }
     return {
-      kind: "clarification",
-      question: "Which task should be marked complete? Include the task title.",
+      kind: "action",
+      suggestedAction: buildSuggestedAction(
+        "mark_task_complete",
+        `Complete task: ${fallback.title}`,
+        `Mark "${fallback.title}" as completed.`,
+        { task_id: fallback.id },
+        "task",
+        fallback.id,
+      ),
     };
   }
 
+  const taskResult = resolveTaskForWriteIntent(reference, context, {
+    ...writeOptions,
+    originalQuestion: writeOptions?.originalQuestion ?? question,
+  });
+  if (taskResult.status === "needs_clarification") {
+    return taskResult.result;
+  }
+
+  const task = taskResult.entity;
   return {
     kind: "action",
     suggestedAction: buildSuggestedAction(
@@ -334,6 +382,27 @@ function tryMergePendingCreateAppointment(
   );
 }
 
+function tryMergePendingMultiDayAssignment(
+  question: string,
+  pending: MultiDayAssignmentPendingIntent | undefined,
+  context: BrainContextSnapshot,
+  writeOptions?: WriteIntentParseOptions,
+): WriteIntentResult | null {
+  if (!pending || !isLikelyMultiDayFollowUpAnswer(question, pending)) {
+    return null;
+  }
+
+  return resolveMultiDayAssignmentFromPending(
+    question.trim(),
+    pending,
+    context,
+    context.customerDirectory,
+    context.employeeDirectory,
+    [],
+    writeOptions,
+  );
+}
+
 function parseCreateAppointment(
   question: string,
   context: BrainContextSnapshot,
@@ -353,6 +422,7 @@ function parseCreateAppointment(
 function parseRescheduleAppointment(
   question: string,
   context: BrainContextSnapshot,
+  writeOptions?: WriteIntentParseOptions,
 ): WriteIntentResult {
   const input = parseRescheduleAppointmentRequest(question);
   if (!input) {
@@ -363,18 +433,28 @@ function parseRescheduleAppointment(
     input,
     context,
     context.customerDirectory,
+    writeOptions,
   );
 }
 
 function parseAssignEmployee(
   question: string,
   context: BrainContextSnapshot,
+  writeOptions?: WriteIntentParseOptions,
 ): WriteIntentResult {
   if (!/\bassign\b/i.test(question)) {
     return { kind: "none" };
   }
 
+  if (isMultiDayAssignmentIntent(question)) {
+    return { kind: "none" };
+  }
+
   const parsed = parseAssignEmployeeRequest(question);
+  const parseOpts: WriteIntentParseOptions = {
+    ...writeOptions,
+    originalQuestion: writeOptions?.originalQuestion ?? question,
+  };
 
   if (!parsed.employeeName && !parsed.customerName) {
     return { kind: "none" };
@@ -387,29 +467,16 @@ function parseAssignEmployee(
     };
   }
 
-  const employeeMatch = resolveActiveEmployeeByName(parsed.employeeName, context);
-  if (employeeMatch.kind === "none") {
-    return {
-      kind: "clarification",
-      question: `I couldn't find an active employee named "${parsed.employeeName.trim()}".`,
-    };
+  const employeeResult = resolveEmployeeForWriteIntent(
+    parsed.employeeName,
+    context,
+    parseOpts,
+  );
+  if (employeeResult.status === "needs_clarification") {
+    return employeeResult.result;
   }
 
-  if (employeeMatch.kind === "many") {
-    const names = employeeMatch.entities.map((employee) => employee.name).join(" and ");
-    return {
-      kind: "clarification",
-      question: `I found multiple employees matching "${parsed.employeeName.trim()}": ${names}. Which one should I assign?`,
-    };
-  }
-
-  const employee = employeeMatch.entity;
-  if (!entityBelongsToContextBusiness(context, "employee", employee.id)) {
-    return {
-      kind: "clarification",
-      question: `I couldn't find an active employee named "${parsed.employeeName.trim()}".`,
-    };
-  }
+  const employee = employeeResult.entity;
 
   if (!parsed.customerName) {
     return {
@@ -418,30 +485,16 @@ function parseAssignEmployee(
     };
   }
 
-  const customerMatch = resolveCustomerReference(parsed.customerName, context);
-  if (customerMatch.kind === "none") {
-    return {
-      kind: "clarification",
-      question: `I found ${employee.name}, but I couldn't find a customer or company named "${parsed.customerName.trim()}" in your business.`,
-    };
+  const customerResult = resolveCustomerForWriteIntent(
+    parsed.customerName,
+    context,
+    parseOpts,
+  );
+  if (customerResult.status === "needs_clarification") {
+    return customerResult.result;
   }
 
-  if (customerMatch.kind === "many") {
-    if (customersMatchedByCompany(parsed.customerName, customerMatch.entities)) {
-      return {
-        kind: "clarification",
-        question: `I found ${employee.name}, but multiple customers share the company "${parsed.customerName.trim()}": ${formatCustomerClarificationList(customerMatch.entities)}. Which customer did you mean?`,
-      };
-    }
-
-    const labels = customerMatch.entities.map((customer) => formatCustomerDisplay(customer)).join(" and ");
-    return {
-      kind: "clarification",
-      question: `I found ${employee.name}, but multiple customers match "${parsed.customerName.trim()}": ${labels}. Which customer did you mean?`,
-    };
-  }
-
-  const customer = customerMatch.entity;
+  const customer = customerResult.entity;
   const customerLabel = formatCustomerDisplay(customer);
   if (!entityBelongsToContextBusiness(context, "customer", customer.id)) {
     return {
@@ -647,6 +700,10 @@ const PARSERS = [
   parseCreateTask,
   parseMarkTaskComplete,
   parseRescheduleAppointment,
+  parseMultiDayAssignmentRequest,
+  parseTimeOffRequest,
+  parseEmployeeShiftRequest,
+  parseInternalScheduleRequest,
   parseCreateAppointment,
   parseAssignEmployee,
   parseCreateCustomerNote,
@@ -657,20 +714,35 @@ const PARSERS = [
 export function parseWriteIntent(
   question: string,
   context: BrainContextSnapshot,
-  options?: { pendingCreateAppointment?: CreateAppointmentPendingIntent },
+  options?: WriteIntentParseOptions,
 ): WriteIntentResult {
   const trimmed = question.trim();
   if (!trimmed) {
     return { kind: "none" };
   }
 
-  const merged = tryMergePendingCreateAppointment(
+  const parseOptions: WriteIntentParseOptions = {
+    ...options,
+    originalQuestion: options?.originalQuestion ?? trimmed,
+  };
+
+  const mergedAppointment = tryMergePendingCreateAppointment(
     trimmed,
     options?.pendingCreateAppointment,
     context,
   );
-  if (merged) {
-    return merged;
+  if (mergedAppointment) {
+    return mergedAppointment;
+  }
+
+  const mergedMultiDay = tryMergePendingMultiDayAssignment(
+    trimmed,
+    options?.pendingMultiDayAssignment,
+    context,
+    parseOptions,
+  );
+  if (mergedMultiDay) {
+    return mergedMultiDay;
   }
 
   if (!hasWriteIntent(trimmed)) {
@@ -678,7 +750,7 @@ export function parseWriteIntent(
   }
 
   for (const parser of PARSERS) {
-    const result = parser(trimmed, context);
+    const result = parser(trimmed, context, parseOptions);
     if (result.kind !== "none") {
       return result;
     }
@@ -694,7 +766,7 @@ export function parseWriteIntent(
 export function buildWriteIntentFallbackResponse(
   question: string,
   context: BrainContextSnapshot,
-  options?: { pendingCreateAppointment?: CreateAppointmentPendingIntent },
+  options?: WriteIntentParseOptions,
 ): Record<string, unknown> | null {
   return formatWriteIntentResponse(
     parseWriteIntent(question, context, options),
@@ -705,11 +777,73 @@ export function buildWriteIntentFallbackResponse(
 export async function buildWriteIntentFallbackResponseAsync(
   question: string,
   context: BrainContextSnapshot,
-  options?: { pendingCreateAppointment?: CreateAppointmentPendingIntent },
+  options?: WriteIntentParseOptions,
 ): Promise<Record<string, unknown> | null> {
   const trimmed = question.trim();
   if (!trimmed) {
     return null;
+  }
+
+  const parseOptions: WriteIntentParseOptions = {
+    ...options,
+    originalQuestion: options?.originalQuestion ?? trimmed,
+  };
+
+  if (options?.pendingEntityClarification?.awaitingManualEntry) {
+    const { retryManualEntityEntry } = await import("./entity-clarification-resume");
+    const { loadInvoiceLookupDirectory, loadScheduleEntryLookupDirectory } = await import(
+      "./entity-live-lookup"
+    );
+    const pending = options.pendingEntityClarification;
+    const [invoices, scheduleEntries] = await Promise.all([
+      loadInvoiceLookupDirectory(context.businessProfileId).catch(() => []),
+      loadScheduleEntryLookupDirectory(context.businessProfileId).catch(() => []),
+    ]);
+    const retryResult = await retryManualEntityEntry(trimmed, pending, context, {
+      ...parseOptions,
+      liveInvoiceDirectory: invoices,
+      liveScheduleEntryDirectory: scheduleEntries,
+    });
+    if (retryResult.kind === "none") {
+      const { buildCancelPendingClarificationMessage } = await import(
+        "./pending-entity-clarification"
+      );
+      return {
+        answer: buildCancelPendingClarificationMessage(),
+        summary: buildCancelPendingClarificationMessage(),
+        supportingFacts: [],
+        warnings: [],
+        suggestedActions: [],
+        confidence: "medium",
+        dataFreshness: context.generatedAt,
+        pendingEntityClarification: null,
+        pendingCreateAppointment: null,
+        pendingMultiDayAssignment: null,
+      };
+    }
+    return formatWriteIntentResponse(retryResult, context);
+  }
+
+  if (
+    options?.pendingMultiDayAssignment &&
+    isLikelyMultiDayFollowUpAnswer(trimmed, options.pendingMultiDayAssignment)
+  ) {
+    const { loadBusinessCustomerDirectory } = await import("./customer-lookup");
+    const { loadBusinessEmployeeDirectory } = await import("./employee-lookup");
+    const [customers, employees] = await Promise.all([
+      loadBusinessCustomerDirectory(context.businessProfileId),
+      loadBusinessEmployeeDirectory(context.businessProfileId),
+    ]);
+    const merged = resolveMultiDayAssignmentFromPending(
+      trimmed,
+      options.pendingMultiDayAssignment,
+      context,
+      customers,
+      employees,
+      [],
+      parseOptions,
+    );
+    return formatWriteIntentResponse(merged, context);
   }
 
   if (options?.pendingCreateAppointment && isLikelyFollowUpCustomerAnswer(trimmed)) {
@@ -743,6 +877,59 @@ export async function buildWriteIntentFallbackResponseAsync(
     return formatWriteIntentResponse(merged, context);
   }
 
+  if (isMultiDayAssignmentIntent(trimmed)) {
+    const { loadBusinessCustomerDirectory } = await import("./customer-lookup");
+    const { loadBusinessEmployeeDirectory } = await import("./employee-lookup");
+    const { getAppointmentsByDateRange } = await import("@/lib/appointments");
+    const { getScheduleEntriesByDateRange } = await import("@/lib/schedule-entries/service");
+    const {
+      appointmentToBlock,
+      scheduleEntryToBlocks,
+    } = await import("@/lib/schedule-entries/conflicts");
+
+    const [customers, employees] = await Promise.all([
+      loadBusinessCustomerDirectory(context.businessProfileId),
+      loadBusinessEmployeeDirectory(context.businessProfileId),
+    ]);
+
+    const dateRange = extractAssignmentDateRange(trimmed, context);
+    let existingBlocks: import("@/lib/schedule-entries/conflicts").SchedulableBlock[] = [];
+    if (
+      dateRange &&
+      !dateRange.ambiguousYear &&
+      dateRange.endDate >= dateRange.startDate
+    ) {
+      const [appointments, entries] = await Promise.all([
+        getAppointmentsByDateRange(
+          context.businessProfileId,
+          dateRange.startDate,
+          dateRange.endDate,
+        ),
+        getScheduleEntriesByDateRange(
+          context.businessProfileId,
+          dateRange.startDate,
+          dateRange.endDate,
+        ),
+      ]);
+      existingBlocks = [
+        ...appointments.map(appointmentToBlock),
+        ...entries.flatMap(scheduleEntryToBlocks),
+      ];
+    }
+
+    const multiDayResult = resolveMultiDayAssignmentIntent(
+      trimmed,
+      context,
+      customers,
+      employees,
+      existingBlocks,
+      parseOptions,
+    );
+    if (multiDayResult.kind !== "none") {
+      return formatWriteIntentResponse(multiDayResult, context);
+    }
+  }
+
   const createInput = parseCreateAppointmentRequest(trimmed);
   if (createInput) {
     const { loadBusinessCustomerDirectory } = await import("./customer-lookup");
@@ -759,16 +946,53 @@ export async function buildWriteIntentFallbackResponseAsync(
       rescheduleInput,
       context,
       context.customerDirectory,
+      parseOptions,
     );
     if (rescheduleResult.kind !== "none") {
       return formatWriteIntentResponse(rescheduleResult, context);
     }
   }
 
-  return buildWriteIntentFallbackResponse(trimmed, context, options);
+  const { isInvoiceLookupIntent, resolveInvoiceLookupIntent } = await import(
+    "./invoice-lookup-parser"
+  );
+  const { loadInvoiceLookupDirectory, loadScheduleEntryLookupDirectory } = await import(
+    "./entity-live-lookup"
+  );
+  const { isScheduleEntryLookupIntent, resolveScheduleEntryLookupIntent } = await import(
+    "./schedule-entry-lookup-parser"
+  );
+
+  if (isInvoiceLookupIntent(trimmed)) {
+    const invoices = await loadInvoiceLookupDirectory(context.businessProfileId);
+    const invoiceResult = resolveInvoiceLookupIntent(
+      trimmed,
+      context,
+      invoices,
+      parseOptions,
+    );
+    if (invoiceResult.kind !== "none") {
+      return formatWriteIntentResponse(invoiceResult, context);
+    }
+  }
+
+  if (isScheduleEntryLookupIntent(trimmed)) {
+    const entries = await loadScheduleEntryLookupDirectory(context.businessProfileId);
+    const entryResult = resolveScheduleEntryLookupIntent(
+      trimmed,
+      context,
+      entries,
+      parseOptions,
+    );
+    if (entryResult.kind !== "none") {
+      return formatWriteIntentResponse(entryResult, context);
+    }
+  }
+
+  return buildWriteIntentFallbackResponse(trimmed, context, parseOptions);
 }
 
-function formatWriteIntentResponse(
+export function formatWriteIntentResponse(
   intent: WriteIntentResult,
   context: BrainContextSnapshot,
 ): Record<string, unknown> | null {
@@ -782,6 +1006,9 @@ function formatWriteIntentResponse(
       confidence: "medium",
       dataFreshness: context.generatedAt,
       pendingCreateAppointment: intent.pendingCreateAppointment,
+      pendingMultiDayAssignment: intent.pendingMultiDayAssignment,
+      entitySuggestions: intent.entitySuggestions,
+      pendingEntityClarification: intent.pendingEntityClarification,
     };
   }
 

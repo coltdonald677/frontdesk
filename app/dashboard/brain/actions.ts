@@ -3,15 +3,22 @@
 import { revalidatePath } from "next/cache";
 import {
   askPlutoBrain,
+  cancelPendingClarificationBrain,
+  dismissEntitySuggestionBrain,
   generateBrainBriefing,
   getBrainStatusForBusiness,
   proposeBrainSuggestedAction,
+  resumeEntitySuggestionBrain,
   type BrainBriefing,
   type BrainResponse,
   type BrainSuggestedAction,
 } from "@/lib/brain";
 import type { BrainPageContextHint } from "@/lib/brain/page-context";
-import type { CreateAppointmentPendingIntent } from "@/lib/brain/types";
+import type { CreateAppointmentPendingIntent, MultiDayAssignmentPendingIntent } from "@/lib/brain/types";
+import type {
+  EntitySuggestion,
+  PendingEntityClarification,
+} from "@/lib/brain/pending-entity-clarification";
 import { getBusinessProfile } from "@/lib/business-profile";
 
 export type BrainActionState = {
@@ -34,6 +41,8 @@ export type BriefingBrainResult = {
 export type AskPlutoBrainActionInput = {
   question: string;
   pendingCreateAppointment?: CreateAppointmentPendingIntent;
+  pendingMultiDayAssignment?: MultiDayAssignmentPendingIntent;
+  pendingEntityClarification?: PendingEntityClarification;
   pageContextHint?: BrainPageContextHint;
 };
 
@@ -61,11 +70,17 @@ export async function askPlutoBrainAction(
     typeof input === "string"
       ? legacyPendingCreateAppointment
       : input.pendingCreateAppointment;
+  const pendingMultiDayAssignment =
+    typeof input === "string" ? undefined : input.pendingMultiDayAssignment;
+  const pendingEntityClarification =
+    typeof input === "string" ? undefined : input.pendingEntityClarification;
   const pageContextHint =
     typeof input === "string" ? undefined : input.pageContextHint;
 
   const result = await askPlutoBrain(question, {
     pendingCreateAppointment,
+    pendingMultiDayAssignment,
+    pendingEntityClarification,
     pageContextHint,
   });
 
@@ -114,4 +129,44 @@ export async function proposeBrainActionAction(
     message: "Action proposed. Review it in Action Center.",
     actionId: result.actionId,
   };
+}
+
+export async function selectEntitySuggestionAction(input: {
+  pending: PendingEntityClarification;
+  suggestion: EntitySuggestion;
+}): Promise<AskBrainResult> {
+  const result = await resumeEntitySuggestionBrain({
+    pending: input.pending,
+    selectedEntityId: input.suggestion.entityId,
+    selectedLabel: input.suggestion.label,
+    selectedEntityType: input.suggestion.entityType,
+  });
+
+  if (!result.ok) {
+    return { error: result.error.message };
+  }
+
+  return { response: result.result.response };
+}
+
+export async function dismissEntitySuggestionAction(input: {
+  pending: PendingEntityClarification;
+}): Promise<AskBrainResult> {
+  const result = await dismissEntitySuggestionBrain({ pending: input.pending });
+
+  if (!result.ok) {
+    return { error: result.error.message };
+  }
+
+  return { response: result.result.response };
+}
+
+export async function cancelPendingClarificationAction(): Promise<AskBrainResult> {
+  const result = await cancelPendingClarificationBrain();
+
+  if (!result.ok) {
+    return { error: result.error.message };
+  }
+
+  return { response: result.result.response };
 }

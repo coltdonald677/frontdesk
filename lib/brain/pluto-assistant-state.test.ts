@@ -2,9 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   applyPlutoAskError,
   applyPlutoAskSuccess,
+  computeAskButtonDisabled,
+  computeAssistantControlsDisabled,
+  computeHydrationSafeAskDisabled,
+  computeHydrationSafeControlsDisabled,
   computePlutoAssistantBadge,
   createInitialPlutoAssistantState,
+  normalizeAssistantQuestion,
   shouldPersistConversationOnNavigation,
+  booleanProp,
+  anyTruthy,
+  assertBooleanProp,
+  computeAskButtonLabel,
+  computeHydrationSafeAskBusy,
+  toDisabledBoolean,
 } from "@/lib/brain/pluto-assistant-state";
 import type { BrainResponse } from "@/lib/brain/types";
 
@@ -120,6 +131,7 @@ describe("computePlutoAssistantBadge", () => {
           employeeId: null,
           employeeName: null,
         },
+        pendingMultiDayAssignment: null,
         response: null,
         proposedActionCount: 0,
       }),
@@ -130,6 +142,7 @@ describe("computePlutoAssistantBadge", () => {
     expect(
       computePlutoAssistantBadge({
         pendingCreateAppointment: null,
+        pendingMultiDayAssignment: null,
         response: buildResponse({
           suggestedActions: [
             {
@@ -150,6 +163,7 @@ describe("computePlutoAssistantBadge", () => {
     expect(
       computePlutoAssistantBadge({
         pendingCreateAppointment: null,
+        pendingMultiDayAssignment: null,
         response: null,
         proposedActionCount: 2,
       }),
@@ -160,9 +174,123 @@ describe("computePlutoAssistantBadge", () => {
     expect(
       computePlutoAssistantBadge({
         pendingCreateAppointment: null,
+        pendingMultiDayAssignment: null,
         response: buildResponse(),
         proposedActionCount: 0,
       }),
     ).toBe(false);
+  });
+});
+
+describe("computeAskButtonDisabled", () => {
+  it("matches server and initial client disabled state for empty question", () => {
+    const initial = createInitialPlutoAssistantState();
+    const disabled = computeAskButtonDisabled(false, initial.question);
+    expect(disabled).toBe(true);
+    expect(typeof disabled).toBe("boolean");
+    expect(computeAskButtonDisabled(false, initial.question)).toBe(disabled);
+  });
+
+  it("disables Ask for whitespace-only input", () => {
+    expect(computeAskButtonDisabled(false, "   ")).toBe(true);
+  });
+
+  it("enables Ask for a valid question", () => {
+    expect(computeAskButtonDisabled(false, "What needs my attention today?")).toBe(false);
+  });
+
+  it("disables Ask while submitting", () => {
+    expect(computeAskButtonDisabled(true, "What needs my attention today?")).toBe(true);
+  });
+
+  it("normalizes nullish question values to disabled", () => {
+    expect(computeAskButtonDisabled(false, null)).toBe(true);
+    expect(computeAskButtonDisabled(false, undefined)).toBe(true);
+  });
+});
+
+describe("restored assistant state hydration safety", () => {
+  it("does not enable Ask when restored state has empty question", () => {
+    const restored = createInitialPlutoAssistantState();
+    expect(computeAskButtonDisabled(false, normalizeAssistantQuestion(restored.question))).toBe(
+      true,
+    );
+  });
+
+  it("persists pending proposal without changing Ask disabled baseline", () => {
+    const restored = applyPlutoAskSuccess(createInitialPlutoAssistantState(), buildResponse(), "Help");
+    expect(shouldPersistConversationOnNavigation(restored)).toBe(true);
+    expect(computeAskButtonDisabled(false, restored.question)).toBe(false);
+  });
+});
+
+describe("computeAssistantControlsDisabled", () => {
+  it("always returns a boolean", () => {
+    expect(computeAssistantControlsDisabled(false)).toBe(false);
+    expect(computeAssistantControlsDisabled(true)).toBe(true);
+    expect(computeAssistantControlsDisabled(null)).toBe(false);
+    expect(computeAssistantControlsDisabled(undefined)).toBe(false);
+  });
+});
+
+describe("computeHydrationSafeAskDisabled", () => {
+  it("ignores restored question before hydration", () => {
+    expect(
+      computeHydrationSafeAskDisabled({
+        isHydrated: false,
+        isPending: false,
+        question: "Restored question",
+      }),
+    ).toBe(true);
+  });
+
+  it("uses live question after hydration", () => {
+    expect(
+      computeHydrationSafeAskDisabled({
+        isHydrated: true,
+        isPending: false,
+        question: "Restored question",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("computeAskButtonLabel", () => {
+  it("returns Ask when idle", () => {
+    expect(computeAskButtonLabel(false)).toBe("Ask");
+  });
+
+  it("returns Analyzing when busy after hydration", () => {
+    expect(computeAskButtonLabel(true)).toBe("Analyzing…");
+  });
+
+  it("hydration gate keeps busy false before hydration even if pending is true", () => {
+    expect(
+      computeHydrationSafeAskBusy({
+        isHydrated: false,
+        isPending: true,
+        question: "Hello",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("booleanProp helpers", () => {
+  it("booleanProp and anyTruthy always return booleans", () => {
+    expect(typeof booleanProp(null)).toBe("boolean");
+    expect(typeof anyTruthy(null, undefined)).toBe("boolean");
+    expect(assertBooleanProp("test", false)).toBe(false);
+  });
+
+  it("throws in test mode for null boolean props", () => {
+    expect(() => assertBooleanProp("disabled", null)).toThrow();
+  });
+});
+
+describe("toDisabledBoolean", () => {
+  it("coerces logical-or inputs to boolean", () => {
+    expect(toDisabledBoolean(null || undefined)).toBe(false);
+    expect(toDisabledBoolean(null || true)).toBe(true);
+    expect(typeof toDisabledBoolean(null, undefined)).toBe("boolean");
   });
 });

@@ -25,6 +25,7 @@ import {
 import { getBusinessUsageCountToday } from "./usage-log";
 import { getAiSettingsForBusiness } from "@/lib/business-settings";
 import { assertEntityBelongsToBusiness, requireAuthenticatedBusiness } from "./permissions";
+import { validateMultiDayAssignmentProposal } from "./multi-day-assignment-parser";
 import {
   BRAIN_SYSTEM_INSTRUCTIONS,
   BRAIN_TOOL_DEFINITIONS,
@@ -51,6 +52,7 @@ import type {
   BrainServiceError,
   BrainSuggestedAction,
   CreateAppointmentPendingIntent,
+  MultiDayAssignmentPendingIntent,
 } from "./types";
 
 function deriveTopPriorities(response: BrainResponse): string[] {
@@ -68,7 +70,10 @@ async function runBrainQuery(
     cacheKey?: string;
     requestType?: "question" | "briefing";
     pendingCreateAppointment?: CreateAppointmentPendingIntent;
+    pendingMultiDayAssignment?: MultiDayAssignmentPendingIntent;
+    pendingEntityClarification?: import("./pending-entity-clarification").PendingEntityClarification;
     originalQuestion?: string;
+    pageContext?: import("./page-context").ValidatedBrainPageContext | null;
   },
 ): Promise<
   | { ok: true; response: BrainResponse; topPriorities: string[]; fromCache: boolean }
@@ -209,6 +214,9 @@ async function runBrainQuery(
     toolDefinitions: BRAIN_TOOL_DEFINITIONS,
     maxOutputTokens: config.maxOutputTokens,
     pendingCreateAppointment: options?.pendingCreateAppointment,
+    pendingMultiDayAssignment: options?.pendingMultiDayAssignment,
+    pendingEntityClarification: options?.pendingEntityClarification,
+    pageContext: options?.pageContext,
   });
 
   if (!result.ok) {
@@ -231,6 +239,9 @@ async function runBrainQuery(
         toolDefinitions: BRAIN_TOOL_DEFINITIONS,
         maxOutputTokens: config.maxOutputTokens,
         pendingCreateAppointment: options?.pendingCreateAppointment,
+        pendingMultiDayAssignment: options?.pendingMultiDayAssignment,
+        pendingEntityClarification: options?.pendingEntityClarification,
+        pageContext: options?.pageContext,
       });
 
       if (fallbackResult.ok) {
@@ -343,6 +354,8 @@ export async function askPlutoBrain(
   question: string,
   options?: {
     pendingCreateAppointment?: CreateAppointmentPendingIntent;
+    pendingMultiDayAssignment?: MultiDayAssignmentPendingIntent;
+    pendingEntityClarification?: import("./pending-entity-clarification").PendingEntityClarification;
     pageContextHint?: import("@/lib/brain/page-context").BrainPageContextHint;
   },
 ): Promise<
@@ -370,6 +383,7 @@ export async function askPlutoBrain(
   }
 
   let contextualQuestion = trimmed;
+  let validatedPageContext: import("./page-context").ValidatedBrainPageContext | null = null;
   if (options?.pageContextHint) {
     const { validateBrainPageContext } = await import("./validate-page-context");
     const { buildContextualBrainQuestion } = await import("./page-context");
@@ -383,6 +397,7 @@ export async function askPlutoBrain(
         error: { code: "provider_error", message: validated.error },
       };
     }
+    validatedPageContext = validated.context;
     contextualQuestion = buildContextualBrainQuestion(trimmed, validated.context);
   }
 
@@ -390,7 +405,10 @@ export async function askPlutoBrain(
     useCache: true,
     requestType: "question",
     pendingCreateAppointment: options?.pendingCreateAppointment,
+    pendingMultiDayAssignment: options?.pendingMultiDayAssignment,
+    pendingEntityClarification: options?.pendingEntityClarification,
     originalQuestion: trimmed,
+    pageContext: validatedPageContext,
   });
   if (!query.ok) {
     const context = await buildBrainContext(auth.businessProfileId, auth.displayName);
@@ -399,6 +417,9 @@ export async function askPlutoBrain(
       question: trimmed,
       context,
       pendingCreateAppointment: options?.pendingCreateAppointment,
+      pendingMultiDayAssignment: options?.pendingMultiDayAssignment,
+      pendingEntityClarification: options?.pendingEntityClarification,
+      pageContext: validatedPageContext,
     });
     const validated = validateBrainResponse(fallbackRaw, "development-fallback", true);
     if (validated.valid) {
@@ -495,6 +516,13 @@ export async function proposeBrainSuggestedAction(
     return { ok: false, error: payloadCheck.error };
   }
 
+  if (suggested.actionType === "create_multi_day_assignment") {
+    const proposalCheck = validateMultiDayAssignmentProposal(suggested);
+    if (!proposalCheck.valid) {
+      return { ok: false, error: proposalCheck.error ?? "Assignment proposal is incomplete." };
+    }
+  }
+
   const ownership = await assertEntityBelongsToBusiness(
     auth.businessProfileId,
     suggested.relatedEntityType,
@@ -525,6 +553,20 @@ export async function proposeBrainSuggestedAction(
         auth.businessProfileId,
         entityType,
         value,
+      );
+      if (!check.ok) {
+        return { ok: false, error: check.error };
+      }
+    }
+  }
+
+  if (Array.isArray(payload.employee_ids)) {
+    for (const employeeId of payload.employee_ids) {
+      if (typeof employeeId !== "string" || !employeeId) continue;
+      const check = await assertEntityBelongsToBusiness(
+        auth.businessProfileId,
+        "employee",
+        employeeId,
       );
       if (!check.ok) {
         return { ok: false, error: check.error };
@@ -566,6 +608,152 @@ export async function proposeBrainSuggestedAction(
   });
 
   return { ok: true, actionId: action.id };
+}
+
+export async function resumeEntitySuggestionBrain(input: {
+  pending: import("./pending-entity-clarification").PendingEntityClarification;
+  selectedEntityId: string;
+  selectedLabel: string;
+  selectedEntityType: import("./pending-entity-clarification").EntitySuggestionType;
+  pageContext?: import("./page-context").ValidatedBrainPageContext | null;
+}): Promise<
+  | { ok: true; result: BrainAskResult }
+  | { ok: false; error: BrainServiceError }
+> {
+  const auth = await requireAuthenticatedBusiness();
+  const context = await buildBrainContext(auth.businessProfileId, auth.displayName);
+  const { continueAfterEntitySuggestionSelection } = await import(
+    "./entity-clarification-resume"
+  );
+  const { formatWriteIntentResponse } = await import("./write-intent-parser");
+  const { validateBrainResponse } = await import("./schemas");
+
+  const intent = await continueAfterEntitySuggestionSelection({
+    context,
+    pending: input.pending,
+    selectedEntityId: input.selectedEntityId,
+    selectedLabel: input.selectedLabel,
+    selectedEntityType: input.selectedEntityType,
+    pageContext: input.pageContext,
+  });
+
+  const raw = formatWriteIntentResponse(intent, context);
+  if (!raw) {
+    return {
+      ok: false,
+      error: {
+        code: "provider_error",
+        message: "Could not continue your request after that selection.",
+      },
+    };
+  }
+
+  const validated = validateBrainResponse(raw, "entity-clarification", true);
+  if (!validated.valid) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid_response",
+        message: "Pluto could not build a valid response from that selection.",
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    result: {
+      response: validated.response,
+      proposedActionIds: [],
+    },
+  };
+}
+
+export async function dismissEntitySuggestionBrain(input: {
+  pending: import("./pending-entity-clarification").PendingEntityClarification;
+}): Promise<
+  | { ok: true; result: BrainAskResult }
+  | { ok: false; error: BrainServiceError }
+> {
+  const auth = await requireAuthenticatedBusiness();
+  const context = await buildBrainContext(auth.businessProfileId, auth.displayName);
+  const { buildDismissEntitySuggestionsResult } = await import("./entity-suggestion-service");
+  const { formatWriteIntentResponse } = await import("./write-intent-parser");
+  const { validateBrainResponse } = await import("./schemas");
+
+  const intent = buildDismissEntitySuggestionsResult(input.pending);
+  const raw = formatWriteIntentResponse(intent, context);
+  if (!raw) {
+    return {
+      ok: false,
+      error: {
+        code: "provider_error",
+        message: "Could not update your clarification request.",
+      },
+    };
+  }
+
+  const validated = validateBrainResponse(raw, "entity-clarification-dismiss", true);
+  if (!validated.valid) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid_response",
+        message: "Pluto could not build a valid response.",
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    result: {
+      response: validated.response,
+      proposedActionIds: [],
+    },
+  };
+}
+
+export async function cancelPendingClarificationBrain(): Promise<
+  | { ok: true; result: BrainAskResult }
+  | { ok: false; error: BrainServiceError }
+> {
+  const auth = await requireAuthenticatedBusiness();
+  const context = await buildBrainContext(auth.businessProfileId, auth.displayName);
+  const { buildCancelPendingClarificationMessage } = await import(
+    "./pending-entity-clarification"
+  );
+  const { validateBrainResponse } = await import("./schemas");
+
+  const raw = {
+    answer: buildCancelPendingClarificationMessage(),
+    summary: buildCancelPendingClarificationMessage(),
+    supportingFacts: [],
+    warnings: [],
+    suggestedActions: [],
+    confidence: "medium" as const,
+    dataFreshness: context.generatedAt,
+    pendingEntityClarification: null,
+    pendingCreateAppointment: null,
+    pendingMultiDayAssignment: null,
+  };
+
+  const validated = validateBrainResponse(raw, "entity-clarification-cancel", true);
+  if (!validated.valid) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid_response",
+        message: "Pluto could not build a valid response.",
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    result: {
+      response: validated.response,
+      proposedActionIds: [],
+    },
+  };
 }
 
 export function getBrainStatus() {

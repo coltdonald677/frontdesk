@@ -13,6 +13,10 @@ import type {
   CreateInvoicePayload,
   CreateAppointmentPayload,
   CreateCustomerNotePayload,
+  CreateEmployeeShiftPayload,
+  CreateInternalScheduleEntryPayload,
+  CreateTimeOffPayload,
+  CreateMultiDayAssignmentPayload,
   CreateTaskPayload,
   MarkAppointmentCompletePayload,
   MarkTaskCompletePayload,
@@ -157,6 +161,80 @@ export function validateActionPayload(
       if (!p.content?.trim()) return { valid: false, error: "Note content is required." };
       if (p.activity_type && !CUSTOMER_ACTIVITY_TYPES.includes(p.activity_type)) {
         return { valid: false, error: "Invalid activity type." };
+      }
+      return { valid: true };
+    }
+    case "create_employee_shift": {
+      const p = payload as CreateEmployeeShiftPayload;
+      if (!p.employee_ids?.length) {
+        return { valid: false, error: "At least one employee is required." };
+      }
+      if (!p.title?.trim()) return { valid: false, error: "Title is required." };
+      if (!p.start_date || !isValidIsoDate(p.start_date)) {
+        return { valid: false, error: "Valid start date is required." };
+      }
+      if (!p.end_date || !isValidIsoDate(p.end_date)) {
+        return { valid: false, error: "Valid end date is required." };
+      }
+      if (!p.start_time || !p.end_time || !isValidTimeRange(p.start_time, p.end_time)) {
+        return { valid: false, error: "Valid start and end times are required." };
+      }
+      return { valid: true };
+    }
+    case "create_internal_schedule_entry": {
+      const p = payload as CreateInternalScheduleEntryPayload;
+      if (!p.employee_ids?.length) {
+        return { valid: false, error: "At least one employee is required." };
+      }
+      if (!p.title?.trim()) return { valid: false, error: "Title is required." };
+      if (!p.start_date || !isValidIsoDate(p.start_date)) {
+        return { valid: false, error: "Valid start date is required." };
+      }
+      if (!p.end_date || !isValidIsoDate(p.end_date)) {
+        return { valid: false, error: "Valid end date is required." };
+      }
+      if (!p.start_time || !p.end_time || !isValidTimeRange(p.start_time, p.end_time)) {
+        return { valid: false, error: "Valid start and end times are required." };
+      }
+      return { valid: true };
+    }
+    case "create_time_off": {
+      const p = payload as CreateTimeOffPayload;
+      if (!p.employee_ids?.length) {
+        return { valid: false, error: "At least one employee is required." };
+      }
+      if (!p.title?.trim()) return { valid: false, error: "Title is required." };
+      if (!p.start_date || !isValidIsoDate(p.start_date)) {
+        return { valid: false, error: "Valid start date is required." };
+      }
+      if (!p.end_date || !isValidIsoDate(p.end_date)) {
+        return { valid: false, error: "Valid end date is required." };
+      }
+      return { valid: true };
+    }
+    case "create_multi_day_assignment": {
+      const p = payload as CreateMultiDayAssignmentPayload;
+      if (!p.employee_ids?.length) {
+        return { valid: false, error: "At least one employee is required." };
+      }
+      if (!p.title?.trim()) return { valid: false, error: "Title is required." };
+      if (!p.start_date || !isValidIsoDate(p.start_date)) {
+        return { valid: false, error: "Valid start date is required." };
+      }
+      if (!p.end_date || !isValidIsoDate(p.end_date)) {
+        return { valid: false, error: "Valid end date is required." };
+      }
+      if (p.end_date < p.start_date) {
+        return { valid: false, error: "End date must be on or after start date." };
+      }
+      if (!p.all_day && (!p.start_time || !p.end_time || p.start_time >= p.end_time)) {
+        return { valid: false, error: "Valid daily start and end times are required." };
+      }
+      if (!p.included_dates?.length) {
+        return { valid: false, error: "Included assignment dates are required." };
+      }
+      if (p.entry_count && p.entry_count !== p.included_dates.length) {
+        return { valid: false, error: "Entry count must match included dates." };
       }
       return { valid: true };
     }
@@ -322,6 +400,41 @@ export async function verifyActionOwnership(
         .eq("business_profile_id", businessProfileId)
         .maybeSingle();
       if (!customer) return { valid: false, error: "Customer not found." };
+      return { valid: true };
+    }
+    case "create_employee_shift":
+    case "create_internal_schedule_entry":
+    case "create_time_off":
+    case "create_multi_day_assignment": {
+      const p = action.payload as
+        | CreateEmployeeShiftPayload
+        | CreateInternalScheduleEntryPayload
+        | CreateTimeOffPayload
+        | CreateMultiDayAssignmentPayload;
+
+      for (const employeeId of p.employee_ids) {
+        const { data: employee } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("id", employeeId)
+          .eq("business_profile_id", businessProfileId)
+          .maybeSingle();
+        if (!employee) return { valid: false, error: "Employee not found." };
+      }
+
+      if (action.action_type === "create_multi_day_assignment") {
+        const multiDay = action.payload as CreateMultiDayAssignmentPayload;
+        if (multiDay.customer_id) {
+          const { data: customer } = await supabase
+            .from("customers")
+            .select("id")
+            .eq("id", multiDay.customer_id)
+            .eq("business_profile_id", businessProfileId)
+            .maybeSingle();
+          if (!customer) return { valid: false, error: "Customer not found." };
+        }
+      }
+
       return { valid: true };
     }
     default:

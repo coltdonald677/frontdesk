@@ -7,7 +7,14 @@ import type {
   BrainResponse,
   BrainSuggestedAction,
   CreateAppointmentPendingIntent,
+  MultiDayAssignmentPendingIntent,
 } from "./types";
+import type {
+  EntitySuggestion,
+  EntitySuggestionType,
+  PendingEntityClarification,
+} from "./pending-entity-clarification";
+import { ENTITY_SUGGESTION_TYPES } from "./pending-entity-clarification";
 
 const CONFIDENCE_VALUES: BrainConfidence[] = ["low", "medium", "high"];
 const RISK_VALUES = ["low", "medium", "high"] as const;
@@ -72,6 +79,33 @@ function parsePendingCreateAppointment(
     durationMinutes: numberOrNull(value.durationMinutes),
     employeeId: stringOrNull(value.employeeId),
     employeeName: stringOrNull(value.employeeName),
+  };
+}
+
+function parsePendingMultiDayAssignment(
+  value: unknown,
+): MultiDayAssignmentPendingIntent | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const stringOrNull = (field: unknown): string | null =>
+    typeof field === "string" && field.trim() ? field.trim() : null;
+
+  const booleanOrNull = (field: unknown): boolean | null =>
+    typeof field === "boolean" ? field : null;
+
+  return {
+    employeeReference: stringOrNull(value.employeeReference),
+    employeeId: stringOrNull(value.employeeId),
+    employeeName: stringOrNull(value.employeeName),
+    customerReference: stringOrNull(value.customerReference),
+    customerId: stringOrNull(value.customerId),
+    customerName: stringOrNull(value.customerName),
+    startDate: stringOrNull(value.startDate),
+    endDate: stringOrNull(value.endDate),
+    startTime: stringOrNull(value.startTime),
+    endTime: stringOrNull(value.endTime),
+    siteLocation: stringOrNull(value.siteLocation),
+    includeWeekends: booleanOrNull(value.includeWeekends),
   };
 }
 
@@ -160,9 +194,109 @@ function validateSuggestedPayload(
       return typeof payload.customer_id === "string" && typeof payload.content === "string"
         ? { valid: true }
         : { valid: false };
+    case "create_employee_shift":
+      return Array.isArray(payload.employee_ids) &&
+        payload.employee_ids.length > 0 &&
+        typeof payload.title === "string" &&
+        payload.title.trim() &&
+        typeof payload.start_date === "string" &&
+        typeof payload.end_date === "string" &&
+        typeof payload.start_time === "string" &&
+        typeof payload.end_time === "string"
+        ? { valid: true }
+        : { valid: false };
+    case "create_internal_schedule_entry":
+      return Array.isArray(payload.employee_ids) &&
+        payload.employee_ids.length > 0 &&
+        typeof payload.title === "string" &&
+        payload.title.trim() &&
+        typeof payload.start_date === "string" &&
+        typeof payload.end_date === "string"
+        ? { valid: true }
+        : { valid: false };
+    case "create_time_off":
+      return Array.isArray(payload.employee_ids) &&
+        payload.employee_ids.length > 0 &&
+        typeof payload.title === "string" &&
+        payload.title.trim() &&
+        typeof payload.start_date === "string" &&
+        typeof payload.end_date === "string"
+        ? { valid: true }
+        : { valid: false };
+    case "create_multi_day_assignment":
+      return Array.isArray(payload.employee_ids) &&
+        payload.employee_ids.length > 0 &&
+        typeof payload.title === "string" &&
+        payload.title.trim() &&
+        typeof payload.start_date === "string" &&
+        typeof payload.end_date === "string" &&
+        Array.isArray(payload.included_dates) &&
+        payload.included_dates.length > 0
+        ? { valid: true }
+        : { valid: false };
     default:
       return { valid: false };
   }
+}
+
+function parseEntitySuggestions(value: unknown): EntitySuggestion[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const suggestions: EntitySuggestion[] = [];
+
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const entityType = asString(item.entityType, "entityType");
+    const entityId = asString(item.entityId, "entityId");
+    const label = asString(item.label, "label");
+    if (
+      !entityType ||
+      !entityId ||
+      !label ||
+      !(ENTITY_SUGGESTION_TYPES as readonly string[]).includes(entityType)
+    ) {
+      continue;
+    }
+    suggestions.push({
+      entityType: entityType as EntitySuggestionType,
+      entityId,
+      label,
+      subtitle: asString(item.subtitle, "subtitle") ?? undefined,
+      score: typeof item.score === "number" ? item.score : 0,
+    });
+  }
+
+  return suggestions.length > 0 ? suggestions : undefined;
+}
+
+function parsePendingEntityClarification(
+  value: unknown,
+): PendingEntityClarification | undefined {
+  if (!isRecord(value)) return undefined;
+  const originalQuestion = asString(value.originalQuestion, "originalQuestion");
+  const unresolvedField = asString(value.unresolvedField, "unresolvedField");
+  const reference = asString(value.reference, "reference");
+  const createdAt = asString(value.createdAt, "createdAt");
+  if (
+    !originalQuestion ||
+    !unresolvedField ||
+    !reference ||
+    !createdAt ||
+    !(ENTITY_SUGGESTION_TYPES as readonly string[]).includes(unresolvedField)
+  ) {
+    return undefined;
+  }
+
+  return {
+    createdAt,
+    originalQuestion,
+    unresolvedField: unresolvedField as EntitySuggestionType,
+    reference,
+    resolvedOverrides: [],
+    pendingCreateAppointment: parsePendingCreateAppointment(value.pendingCreateAppointment),
+    pendingMultiDayAssignment: parsePendingMultiDayAssignment(
+      value.pendingMultiDayAssignment,
+    ),
+  };
 }
 
 export function validateBrainResponse(
@@ -210,6 +344,11 @@ export function validateBrainResponse(
     providerId,
     isFallback,
     pendingCreateAppointment: parsePendingCreateAppointment(raw.pendingCreateAppointment),
+    pendingMultiDayAssignment: parsePendingMultiDayAssignment(raw.pendingMultiDayAssignment),
+    entitySuggestions: parseEntitySuggestions(raw.entitySuggestions),
+    pendingEntityClarification: parsePendingEntityClarification(
+      raw.pendingEntityClarification,
+    ),
   };
 
   return { valid: true, response };

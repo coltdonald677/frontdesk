@@ -30,6 +30,7 @@ export async function validateBrainPageContext(
     { entityType: "appointment", entityId: normalized.appointmentId },
     { entityType: "employee", entityId: normalized.employeeId },
     { entityType: "task", entityId: normalized.taskId },
+    { entityType: "schedule_entry", entityId: normalized.scheduleEntryId },
   ];
 
   for (const check of checks) {

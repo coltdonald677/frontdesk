@@ -11,6 +11,10 @@ const ACTION_RISK_LEVELS: Record<ActionType, ActionRiskLevel> = {
   mark_task_complete: "medium",
   mark_appointment_complete: "high",
   create_invoice: "medium",
+  create_employee_shift: "medium",
+  create_internal_schedule_entry: "medium",
+  create_time_off: "medium",
+  create_multi_day_assignment: "medium",
 };
 
 export function getActionRiskLevel(actionType: ActionType): ActionRiskLevel {

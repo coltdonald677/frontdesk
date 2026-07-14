@@ -108,6 +108,17 @@ export async function assertEntityBelongsToBusiness(
         .maybeSingle();
       return data ? { ok: true } : { ok: false, error: "Invoice not found in this business." };
     }
+    case "schedule_entry": {
+      const { data } = await supabase
+        .from("schedule_entries")
+        .select("id")
+        .eq("id", entityId)
+        .eq("business_profile_id", businessProfileId)
+        .maybeSingle();
+      return data
+        ? { ok: true }
+        : { ok: false, error: "Schedule entry not found in this business." };
+    }
     default:
       return { ok: true };
   }

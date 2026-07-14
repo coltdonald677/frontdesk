@@ -17,10 +17,13 @@ export type {
 
 export {
   askPlutoBrain,
+  cancelPendingClarificationBrain,
+  dismissEntitySuggestionBrain,
   generateBrainBriefing,
   getBrainStatus,
   getBrainStatusForBusiness,
   proposeBrainSuggestedAction,
+  resumeEntitySuggestionBrain,
   filterPhase1SuggestedActions,
 } from "./service";
 

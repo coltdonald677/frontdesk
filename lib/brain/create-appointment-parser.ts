@@ -6,13 +6,17 @@ import {
 } from "./action-display";
 import { formatTime12 } from "./action-display";
 import {
+  buildEntityClarificationResult,
+  buildNoMatchClarificationResult,
+  resolveCustomerWithSuggestions,
+} from "./entity-suggestion-service";
+import {
   customersMatchedByCompany,
   extractRelativeDatePhrase,
   formatCustomerClarificationList,
   formatCustomerDisplay,
   getBusinessTimezoneFromContext,
   resolveActiveEmployeeByName,
-  resolveCustomerReferenceFromList,
   type CustomerDirectoryEntry,
 } from "./entity-resolution";
 import {
@@ -455,36 +459,32 @@ export function resolveCreateAppointmentIntent(
     };
   }
 
-  const customerMatch = resolveCustomerReferenceFromList(
+  const customerOutcome = resolveCustomerWithSuggestions(
     input.customerReference,
     customers,
   );
 
-  if (customerMatch.kind === "none") {
-    return {
-      kind: "clarification",
-      question: `I couldn't find a customer or company matching "${input.customerReference.trim()}" in your business.`,
-      pendingCreateAppointment:
-        appointmentDate || timeRange || employeeId ? buildPending() : undefined,
-    };
-  }
-
-  if (customerMatch.kind === "many") {
-    const question = customersMatchedByCompany(
-      input.customerReference,
-      customerMatch.entities,
-    )
-      ? `Multiple customers share the company "${input.customerReference.trim()}": ${formatCustomerClarificationList(customerMatch.entities)}. Which customer did you mean?`
-      : `Multiple customers match "${input.customerReference.trim()}": ${customerMatch.entities.map((customer) => formatCustomerDisplay(customer)).join(" and ")}. Which customer did you mean?`;
-
-    return {
-      kind: "clarification",
-      question,
+  if (customerOutcome.kind === "none") {
+    return buildNoMatchClarificationResult({
+      originalQuestion: input.customerReference,
+      reference: input.customerReference,
+      entityType: "customer",
       pendingCreateAppointment: buildPending(),
-    };
+    });
   }
 
-  const customer = customerMatch.entity;
+  if (customerOutcome.kind === "suggest" || customerOutcome.kind === "ambiguous") {
+    const clarification = buildEntityClarificationResult({
+      originalQuestion: input.customerReference,
+      reference: input.customerReference,
+      entityType: "customer",
+      suggestions: customerOutcome.suggestions,
+      pendingCreateAppointment: buildPending(),
+    });
+    return clarification;
+  }
+
+  const customer = customerOutcome.entity;
   const customerLabel = formatCustomerDisplay(customer);
 
   if (!input.datePhrase && !appointmentDate) {

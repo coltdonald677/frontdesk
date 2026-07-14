@@ -21,6 +21,10 @@ export const ALLOWED_BRAIN_AUDIT_EVENT_TYPES = [
   "brain.write.create_customer_note",
   "brain.write.create_invoice",
   "brain.write.create_follow_up",
+  "brain.write.create_employee_shift",
+  "brain.write.create_internal_schedule_entry",
+  "brain.write.create_time_off",
+  "brain.write.create_multi_day_assignment",
 ] as const;
 
 export const ALLOWED_BRAIN_AUDIT_RECORD_TYPES = [
@@ -29,6 +33,8 @@ export const ALLOWED_BRAIN_AUDIT_RECORD_TYPES = [
   "appointment",
   "task",
   "invoice",
+  "schedule_entry",
+  "schedule_series",
 ] as const;
 
 export const MAX_AUDIT_SUMMARY_LENGTH = 500;

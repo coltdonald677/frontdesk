@@ -4,7 +4,9 @@ import { Suspense, useState } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 import { PlutoAssistantDrawer } from "@/app/components/brain/pluto-assistant-drawer";
+import { PlutoAssistantPageContextBridge } from "@/app/components/brain/pluto-assistant-page-context-bridge";
 import { PlutoAssistantProvider } from "@/app/components/brain/pluto-assistant-provider";
+import { booleanProp } from "@/lib/brain/pluto-assistant-state";
 
 type DashboardShellProps = {
   children: React.ReactNode;
@@ -26,7 +28,7 @@ function DashboardShellFrame({
         <div className="animate-gradient-pulse absolute bottom-0 left-1/4 h-[400px] w-[400px] rounded-full bg-violet-600/10 blur-[100px]" />
       </div>
 
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar open={booleanProp(sidebarOpen)} onClose={() => setSidebarOpen(false)} />
 
       <div className="relative flex min-w-0 flex-1 flex-col">
         <TopBar
@@ -40,6 +42,9 @@ function DashboardShellFrame({
       </div>
 
       <PlutoAssistantDrawer />
+      <Suspense fallback={null}>
+        <PlutoAssistantPageContextBridge />
+      </Suspense>
     </div>
   );
 }

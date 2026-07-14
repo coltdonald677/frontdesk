@@ -227,6 +227,8 @@ describe("Brain logging RPC validation", () => {
       "appointment",
       "task",
       "invoice",
+      "schedule_entry",
+      "schedule_series",
     ]);
   });
 

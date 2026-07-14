@@ -6,6 +6,7 @@ import {
   getNextFocusTarget,
   handleDrawerKeydown,
 } from "@/lib/brain/drawer-focus";
+import { booleanProp } from "@/lib/brain/pluto-assistant-state";
 import { PlutoAssistantContent } from "./pluto-assistant-content";
 import { usePlutoAssistant } from "./pluto-assistant-provider";
 
@@ -107,7 +108,7 @@ export function PlutoAssistantDrawer() {
         onClick={() => {
           if (!confirmDialogOpen) close();
         }}
-        aria-hidden={!isOpen}
+        aria-hidden={booleanProp(!isOpen)}
       />
 
       <aside
@@ -115,12 +116,12 @@ export function PlutoAssistantDrawer() {
         role="dialog"
         aria-modal="true"
         aria-label="Ask Pluto"
-        className={`fixed inset-y-0 right-0 z-40 flex w-full max-w-full flex-col border-l border-white/[0.08] bg-zinc-950 shadow-2xl transition-transform duration-200 ease-out sm:max-w-md lg:max-w-lg ${
+        className={`fixed inset-y-0 right-0 z-40 flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden border-l border-white/[0.08] bg-zinc-950 shadow-2xl transition-transform duration-200 ease-out sm:max-w-md lg:max-w-lg ${
           isOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
-        aria-hidden={!isOpen}
+        aria-hidden={booleanProp(!isOpen)}
       >
-        <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10">
               <PlutoBrainIcon className="h-4 w-4 text-violet-300" />
@@ -143,8 +144,8 @@ export function PlutoAssistantDrawer() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-          <PlutoAssistantContent />
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-8 sm:px-5 sm:pb-10">
+          <PlutoAssistantContent embedded />
         </div>
       </aside>
     </>

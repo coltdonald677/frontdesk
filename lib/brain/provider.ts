@@ -169,6 +169,10 @@ export class DevelopmentFallbackProvider implements BrainProvider {
       question: request.userQuestion,
       context: request.businessContext,
       pendingCreateAppointment: request.pendingCreateAppointment,
+      pendingMultiDayAssignment: request.pendingMultiDayAssignment,
+      pendingEntityClarification: request.pendingEntityClarification,
+      resolvedEntityOverrides: request.resolvedEntityOverrides,
+      pageContext: request.pageContext,
     };
 
     const rawJson = await buildFallbackResponse(input);
@@ -184,7 +188,17 @@ export async function buildFallbackResponse(
   const writeIntentResponse = await buildWriteIntentFallbackResponseAsync(
     question,
     context,
-    { pendingCreateAppointment: input.pendingCreateAppointment },
+    {
+      pendingCreateAppointment: input.pendingCreateAppointment,
+      pendingMultiDayAssignment: input.pendingMultiDayAssignment,
+      pendingEntityClarification: input.pendingEntityClarification,
+      resolvedEntityOverrides:
+        input.resolvedEntityOverrides ??
+        input.pendingEntityClarification?.resolvedOverrides,
+      originalQuestion:
+        input.pendingEntityClarification?.originalQuestion ?? question,
+      pageContext: input.pageContext,
+    },
   );
   if (writeIntentResponse) {
     return writeIntentResponse;

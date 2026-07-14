@@ -1,4 +1,5 @@
 import { RISK_STYLES, type ActionRiskLevel } from "@/lib/actions/types";
+import { getWeekdayIndexInTimezone } from "@/lib/brain/timezone-dates";
 import type { BrainActionDisplayField, BrainSuggestedAction } from "./types";
 
 const UUID_PATTERN =
@@ -200,6 +201,86 @@ export function buildActionDisplayFields(
 
   if (typeof payload.content === "string" && payload.content.trim()) {
     fields.push({ label: "Note", value: payload.content.trim() });
+  }
+
+  return dedupeDisplayFields(fields);
+}
+
+export function buildMultiDayAssignmentExplanation(input: {
+  employeeNames: string[];
+  customerLabel: string | null;
+  startDate: string;
+  endDate: string;
+  entryCount: number;
+  totalHours: number;
+}): string {
+  const customerPart = input.customerLabel ? ` for ${input.customerLabel}` : "";
+  return `Pluto will propose a ${input.entryCount}-day assignment${customerPart} for ${input.employeeNames.join(" and ")} from ${input.startDate} through ${input.endDate} (${input.totalHours} total hours). Nothing is scheduled until you approve it in Action Center.`;
+}
+
+export function buildMultiDayAssignmentDisplayFields(input: {
+  employeeName: string;
+  customerLabel: string | null;
+  customerId: string | null;
+  siteLocation: string | null;
+  title: string;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  includedDates: string[];
+  hoursPerDay: number;
+  timezone: string;
+  warnings: string[];
+}): BrainActionDisplayField[] {
+  const entryCount = input.includedDates.length;
+  const weekendsIncluded = input.includedDates.some((date) => {
+    const weekday = getWeekdayIndexInTimezone(date, input.timezone);
+    return weekday === 0 || weekday === 6;
+  });
+  const totalHours = entryCount * input.hoursPerDay;
+
+  const fields: BrainActionDisplayField[] = [
+    { label: "Employee", value: input.employeeName },
+    { label: "Work type", value: "Job assignment" },
+    { label: "Title", value: input.title },
+    { label: "Start date", value: input.startDate },
+    { label: "End date", value: input.endDate },
+    { label: "Daily start time", value: formatTime12(input.startTime) },
+    { label: "Daily end time", value: formatTime12(input.endTime) },
+    {
+      label: "Included dates",
+      value: input.includedDates.join(", "),
+    },
+    { label: "Number of entries", value: String(entryCount) },
+    {
+      label: "Hours per day",
+      value: formatDurationLabel(Math.round(input.hoursPerDay * 60)),
+    },
+    {
+      label: "Total hours",
+      value: formatDurationLabel(Math.round(totalHours * 60)),
+    },
+    {
+      label: "Weekends included",
+      value: weekendsIncluded ? "Yes" : "No",
+    },
+  ];
+
+  if (input.customerLabel && input.customerId) {
+    fields.splice(1, 0, {
+      label: "Customer",
+      value: input.customerLabel,
+      href: `/dashboard/customers/${input.customerId}`,
+    });
+  }
+
+  if (input.siteLocation) {
+    fields.push({ label: "Site", value: input.siteLocation });
+  }
+
+  if (input.warnings.length > 0) {
+    fields.push({ label: "Conflicts", value: input.warnings.join(" ") });
   }
 
   return dedupeDisplayFields(fields);

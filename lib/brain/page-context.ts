@@ -1,6 +1,7 @@
 export type BrainPageType =
   | "dashboard"
   | "schedule"
+  | "schedule_entry_detail"
   | "customers"
   | "customer_detail"
   | "employees"
@@ -20,6 +21,7 @@ export type BrainPageContextHint = {
   appointmentId?: string;
   employeeId?: string;
   taskId?: string;
+  scheduleEntryId?: string;
 };
 
 export type ValidatedBrainPageContext = BrainPageContextHint;
@@ -40,6 +42,7 @@ function sanitizeOptionalUuid(value: unknown): string | undefined {
 const PAGE_TYPE_SET = new Set<BrainPageType>([
   "dashboard",
   "schedule",
+  "schedule_entry_detail",
   "customers",
   "customer_detail",
   "employees",
@@ -73,6 +76,7 @@ export function normalizeBrainPageContextHint(
     appointmentId: sanitizeOptionalUuid(hint.appointmentId),
     employeeId: sanitizeOptionalUuid(hint.employeeId),
     taskId: sanitizeOptionalUuid(hint.taskId),
+    scheduleEntryId: sanitizeOptionalUuid(hint.scheduleEntryId),
   };
 }
 
@@ -100,6 +104,10 @@ export function parsePageContextFromPathname(
   switch (section) {
     case "schedule": {
       const appointmentId = sanitizeOptionalUuid(searchParams?.get("appointment") ?? undefined);
+      const scheduleEntryId = sanitizeOptionalUuid(searchParams?.get("entry") ?? undefined);
+      if (scheduleEntryId) {
+        return { pageType: "schedule_entry_detail", scheduleEntryId, appointmentId };
+      }
       return { pageType: "schedule", appointmentId };
     }
     case "customers":
@@ -137,6 +145,7 @@ export function formatPageContextForBrain(context: ValidatedBrainPageContext): s
   if (context.appointmentId) parts.push(`appointment_id=${context.appointmentId}`);
   if (context.employeeId) parts.push(`employee_id=${context.employeeId}`);
   if (context.taskId) parts.push(`task_id=${context.taskId}`);
+  if (context.scheduleEntryId) parts.push(`schedule_entry_id=${context.scheduleEntryId}`);
   return parts.join(", ");
 }
 

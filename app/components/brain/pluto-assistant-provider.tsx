@@ -10,14 +10,15 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
-import { askPlutoBrainAction } from "@/app/dashboard/brain/actions";
+import { usePathname } from "next/navigation";
+import { askPlutoBrainAction, cancelPendingClarificationAction, dismissEntitySuggestionAction, selectEntitySuggestionAction } from "@/app/dashboard/brain/actions";
 import { loadProposedActionCountAction } from "@/app/dashboard/actions/actions";
 import {
   applyPlutoAskError,
   applyPlutoAskSuccess,
   computePlutoAssistantBadge,
   createInitialPlutoAssistantState,
+  normalizeAssistantQuestion,
   type PlutoAssistantConversationState,
 } from "@/lib/brain/pluto-assistant-state";
 import {
@@ -37,11 +38,16 @@ type PlutoAssistantContextValue = {
   pendingCreateAppointment: CreateAppointmentPendingIntent | null;
   error: string | null;
   isPending: boolean;
+  isHydrated: boolean;
   ask: (preset?: string) => void;
+  selectEntitySuggestion: (suggestion: import("@/lib/brain/pending-entity-clarification").EntitySuggestion) => void;
+  dismissEntitySuggestions: () => void;
+  cancelPendingClarification: () => void;
   showBadge: boolean;
   proposedActionCount: number;
   refreshBadge: () => void;
   pageContextHint: BrainPageContextHint;
+  syncPageContextHint: (hint: BrainPageContextHint) => void;
   confirmDialogOpen: boolean;
   setConfirmDialogOpen: (open: boolean) => void;
 };
@@ -62,23 +68,32 @@ type PlutoAssistantProviderProps = {
 
 export function PlutoAssistantProvider({ children }: PlutoAssistantProviderProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [isOpen, setIsOpen] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [conversation, setConversation] = useState<PlutoAssistantConversationState>(
     createInitialPlutoAssistantState,
   );
   const [proposedActionCount, setProposedActionCount] = useState(0);
-  const [isPending, startTransition] = useTransition();
-
-  const pageContextHint = useMemo(
-    () => parsePageContextFromPathname(pathname, searchParams),
-    [pathname, searchParams],
+  const [isAskPending, startAskTransition] = useTransition();
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [pageContextHint, setPageContextHint] = useState<BrainPageContextHint>(() =>
+    parsePageContextFromPathname(pathname, null),
   );
 
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    setPageContextHint(parsePageContextFromPathname(pathname, null));
+  }, [pathname]);
+
+  const syncPageContextHint = useCallback((hint: BrainPageContextHint) => {
+    setPageContextHint(hint);
+  }, []);
+
   const refreshBadge = useCallback(() => {
-    startTransition(async () => {
-      const count = await loadProposedActionCountAction();
+    void loadProposedActionCountAction().then((count) => {
       setProposedActionCount(count);
     });
   }, []);
@@ -87,11 +102,15 @@ export function PlutoAssistantProvider({ children }: PlutoAssistantProviderProps
     refreshBadge();
   }, [refreshBadge, pathname]);
 
-  const showBadge = computePlutoAssistantBadge({
-    pendingCreateAppointment: conversation.pendingCreateAppointment,
-    response: conversation.response,
-    proposedActionCount,
-  });
+  const showBadge = isHydrated
+    ? computePlutoAssistantBadge({
+        pendingCreateAppointment: conversation.pendingCreateAppointment,
+        pendingMultiDayAssignment: conversation.pendingMultiDayAssignment,
+        pendingEntityClarification: conversation.pendingEntityClarification,
+        response: conversation.response,
+        proposedActionCount,
+      })
+    : false;
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => {
@@ -113,10 +132,12 @@ export function PlutoAssistantProvider({ children }: PlutoAssistantProviderProps
       if (!nextQuestion) return;
 
       setConversation((current) => ({ ...current, error: null }));
-      startTransition(async () => {
+      startAskTransition(async () => {
         const result = await askPlutoBrainAction({
           question: nextQuestion,
           pendingCreateAppointment: conversation.pendingCreateAppointment ?? undefined,
+          pendingMultiDayAssignment: conversation.pendingMultiDayAssignment ?? undefined,
+          pendingEntityClarification: conversation.pendingEntityClarification ?? undefined,
           pageContextHint,
         });
 
@@ -138,7 +159,61 @@ export function PlutoAssistantProvider({ children }: PlutoAssistantProviderProps
         refreshBadge();
       });
     },
-    [conversation.pendingCreateAppointment, conversation.question, pageContextHint, refreshBadge],
+    [conversation.pendingCreateAppointment, conversation.pendingMultiDayAssignment, conversation.pendingEntityClarification, conversation.question, pageContextHint, refreshBadge],
+  );
+
+  const dismissEntitySuggestions = useCallback(() => {
+    const pending = conversation.pendingEntityClarification ?? conversation.response?.pendingEntityClarification;
+    if (!pending) return;
+
+    setConversation((current) => ({ ...current, error: null }));
+    startAskTransition(async () => {
+      const result = await dismissEntitySuggestionAction({ pending });
+      if (result.error && !result.response) {
+        setConversation((current) => applyPlutoAskError(current, result.error!));
+        return;
+      }
+      if (result.response) {
+        setConversation((current) => applyPlutoAskSuccess(current, result.response!));
+      }
+      refreshBadge();
+    });
+  }, [conversation.pendingEntityClarification, conversation.response?.pendingEntityClarification, refreshBadge]);
+
+  const cancelPendingClarification = useCallback(() => {
+    setConversation((current) => ({ ...current, error: null }));
+    startAskTransition(async () => {
+      const result = await cancelPendingClarificationAction();
+      if (result.error && !result.response) {
+        setConversation((current) => applyPlutoAskError(current, result.error!));
+        return;
+      }
+      if (result.response) {
+        setConversation((current) => applyPlutoAskSuccess(current, result.response!));
+      }
+      refreshBadge();
+    });
+  }, [refreshBadge]);
+
+  const selectEntitySuggestion = useCallback(
+    (suggestion: import("@/lib/brain/pending-entity-clarification").EntitySuggestion) => {
+      const pending = conversation.pendingEntityClarification ?? conversation.response?.pendingEntityClarification;
+      if (!pending) return;
+
+      setConversation((current) => ({ ...current, error: null }));
+      startAskTransition(async () => {
+        const result = await selectEntitySuggestionAction({ pending, suggestion });
+        if (result.error && !result.response) {
+          setConversation((current) => applyPlutoAskError(current, result.error!));
+          return;
+        }
+        if (result.response) {
+          setConversation((current) => applyPlutoAskSuccess(current, result.response!));
+        }
+        refreshBadge();
+      });
+    },
+    [conversation.pendingEntityClarification, conversation.response?.pendingEntityClarification, refreshBadge],
   );
 
   const value = useMemo<PlutoAssistantContextValue>(
@@ -147,17 +222,24 @@ export function PlutoAssistantProvider({ children }: PlutoAssistantProviderProps
       open,
       close,
       toggle,
-      question: conversation.question,
+      question: isHydrated
+        ? normalizeAssistantQuestion(conversation.question)
+        : "",
       setQuestion,
-      response: conversation.response,
-      pendingCreateAppointment: conversation.pendingCreateAppointment,
-      error: conversation.error,
-      isPending,
+      response: isHydrated ? conversation.response : null,
+      pendingCreateAppointment: isHydrated ? conversation.pendingCreateAppointment : null,
+      error: isHydrated ? conversation.error : null,
+      isPending: isHydrated ? Boolean(isAskPending) : false,
+      isHydrated,
       ask,
+      selectEntitySuggestion,
+      dismissEntitySuggestions,
+      cancelPendingClarification,
       showBadge,
       proposedActionCount,
       refreshBadge,
       pageContextHint,
+      syncPageContextHint,
       confirmDialogOpen,
       setConfirmDialogOpen,
     }),
@@ -167,12 +249,17 @@ export function PlutoAssistantProvider({ children }: PlutoAssistantProviderProps
       close,
       toggle,
       conversation,
-      isPending,
+      isAskPending,
+      isHydrated,
       ask,
+      selectEntitySuggestion,
+      dismissEntitySuggestions,
+      cancelPendingClarification,
       showBadge,
       proposedActionCount,
       refreshBadge,
       pageContextHint,
+      syncPageContextHint,
       confirmDialogOpen,
     ],
   );

@@ -15,6 +15,7 @@ describe("authenticated shell Ask Pluto integration", () => {
 
     expect(shellSource).toContain("PlutoAssistantProvider");
     expect(shellSource).toContain("PlutoAssistantDrawer");
+    expect(shellSource).toContain("PlutoAssistantPageContextBridge");
     expect(topBarSource).toContain("AskPlutoButton");
   });
 

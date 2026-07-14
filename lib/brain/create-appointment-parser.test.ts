@@ -11,6 +11,10 @@ import {
 } from "@/lib/brain/create-appointment-parser";
 import { buildWriteIntentFallbackResponse } from "@/lib/brain/write-intent-parser";
 import { validateBrainResponse } from "@/lib/brain/schemas";
+import {
+  addDaysToIsoDateInTimezone,
+  getTodayIsoDateInTimezone,
+} from "@/lib/brain/timezone-dates";
 import type { BrainContextSnapshot } from "@/lib/brain/types";
 import { parseWriteIntent } from "@/lib/brain/write-intent-parser";
 import type { ProposedPlutoAction } from "@/lib/actions/types";
@@ -138,6 +142,11 @@ describe("create_appointment customer resolution", () => {
     "create an appointment with customer 2 tomorrow at 3:00 pm";
 
   it("resolves numeric customer names case-insensitively", () => {
+    const tomorrow = addDaysToIsoDateInTimezone(
+      getTodayIsoDateInTimezone("America/Denver"),
+      1,
+      "America/Denver",
+    );
     const input = parseCreateAppointmentRequest(liveQuestion);
     expect(input).not.toBeNull();
     if (!input) return;
@@ -152,7 +161,7 @@ describe("create_appointment customer resolution", () => {
 
     expect(intent.suggestedAction.payload).toMatchObject({
       customer_id: CUSTOMER_B,
-      appointment_date: "2026-07-13",
+      appointment_date: tomorrow,
       start_time: "15:00",
       end_time: "16:00",
     });
@@ -210,7 +219,8 @@ describe("create_appointment customer resolution", () => {
     );
     expect(intent.kind).toBe("clarification");
     if (intent.kind !== "clarification") return;
-    expect(intent.question).toContain("Multiple customers match");
+    expect(intent.question).toContain("Which one did you mean");
+    expect(intent.entitySuggestions?.length).toBeGreaterThan(1);
   });
 
   it("asks only for time when customer and date are already supplied", () => {
@@ -230,6 +240,11 @@ describe("create_appointment customer resolution", () => {
   });
 
   it("asks only for customer when customer reference is missing", () => {
+    const tomorrow = addDaysToIsoDateInTimezone(
+      getTodayIsoDateInTimezone("America/Denver"),
+      1,
+      "America/Denver",
+    );
     const input = {
       customerReference: null,
       datePhrase: "tomorrow",
@@ -244,7 +259,7 @@ describe("create_appointment customer resolution", () => {
     if (intent.kind !== "clarification") return;
     expect(intent.question).toContain("Which customer is this appointment for?");
     expect(intent.pendingCreateAppointment).toMatchObject({
-      appointmentDate: "2026-07-13",
+      appointmentDate: tomorrow,
       timePhrase: "3:00 pm",
     });
   });
@@ -258,7 +273,7 @@ describe("create_appointment customer resolution", () => {
     );
     expect(intent.kind).toBe("clarification");
     if (intent.kind !== "clarification") return;
-    expect(intent.question).toContain("couldn't find a customer or company");
+    expect(intent.question).toContain("reliable customer");
   });
 });
 

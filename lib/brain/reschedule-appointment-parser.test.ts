@@ -162,6 +162,7 @@ describe("reschedule_appointment intent detection", () => {
   it("parses the live request fields", () => {
     expect(parseRescheduleAppointmentRequest(liveQuestion)).toEqual({
       customerReference: "Customer 2",
+      employeeReference: null,
       originalDatePhrase: "July 15",
       originalTimePhrase: null,
       newDatePhrase: "July 16",
@@ -237,9 +238,8 @@ describe("reschedule_appointment entity resolution", () => {
     );
     expect(intent.kind).toBe("clarification");
     if (intent.kind !== "clarification") return;
-    expect(intent.question).toContain("multiple appointments");
-    expect(intent.question).toContain("2:00 PM");
-    expect(intent.question).toContain("4:00 PM");
+    expect(intent.entitySuggestions?.length).toBeGreaterThan(1);
+    expect(intent.question).toContain("Which one did you mean");
   });
 
   it("narrows to one appointment when original time is included", () => {

@@ -25,6 +25,69 @@ export function resolveScheduleDate(date?: string) {
   return date;
 }
 
+export type EmployeeScheduleFilter = "unassigned";
+
+export function resolveEmployeeScheduleDate(date?: string) {
+  if (!date || date === "today") {
+    return getTodayIsoDate();
+  }
+  return date;
+}
+
+export function employeeScheduleLink(options?: {
+  date?: string;
+  view?: "day" | "week" | "month";
+  employee?: string;
+  type?: string;
+  newEntry?: boolean;
+}) {
+  const params = new URLSearchParams();
+  params.set("date", resolveEmployeeScheduleDate(options?.date));
+
+  if (options?.view && options.view !== "day") {
+    params.set("view", options.view);
+  }
+
+  if (options?.employee) {
+    params.set("employee", options.employee);
+  }
+
+  if (options?.type) {
+    params.set("type", options.type);
+  }
+
+  if (options?.newEntry) {
+    params.set("new", "entry");
+  }
+
+  return `/dashboard/employee-schedule?${params.toString()}`;
+}
+
+export function parseEmployeeScheduleEntryType(
+  value?: string,
+): import("@/lib/schedule-entries/types").ScheduleEntryType | undefined {
+  if (!value) return undefined;
+  const types = [
+    "customer_appointment",
+    "employee_shift",
+    "internal_work",
+    "meeting",
+    "training",
+    "maintenance",
+    "job_assignment",
+    "time_off",
+  ] as const;
+  return types.includes(value as (typeof types)[number])
+    ? (value as import("@/lib/schedule-entries/types").ScheduleEntryType)
+    : undefined;
+}
+
+export function parseEmployeeScheduleFilter(
+  value?: string,
+): EmployeeScheduleFilter | undefined {
+  return value === "unassigned" ? "unassigned" : undefined;
+}
+
 export function scheduleLink(options?: {
   date?: string;
   view?: "day" | "week" | "month";

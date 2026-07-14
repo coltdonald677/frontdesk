@@ -14,6 +14,10 @@ import {
   getDefaultAppointmentDurationMinutes,
   resolveCreateAppointmentIntent,
 } from "@/lib/brain/create-appointment-parser";
+import {
+  addDaysToIsoDateInTimezone,
+  getTodayIsoDateInTimezone,
+} from "@/lib/brain/timezone-dates";
 import { parseCreateAppointmentRequest } from "@/lib/brain/create-appointment-parser";
 import { validateBrainResponse } from "@/lib/brain/schemas";
 import type { BrainContextSnapshot, BrainSuggestedAction } from "@/lib/brain/types";
@@ -253,10 +257,15 @@ describe("create_appointment execution safeguards", () => {
     const action = validated.response.suggestedActions[0];
     expect(action?.actionType).toBe("create_appointment");
 
+    const tomorrow = addDaysToIsoDateInTimezone(
+      getTodayIsoDateInTimezone("America/Denver"),
+      1,
+      "America/Denver",
+    );
     const validation = validateActionPayload("create_appointment", action!.payload);
     expect(validation.valid).toBe(true);
     expect(action?.payload).toMatchObject({
-      appointment_date: "2026-07-13",
+      appointment_date: tomorrow,
       start_time: "15:00",
       end_time: "16:00",
     });

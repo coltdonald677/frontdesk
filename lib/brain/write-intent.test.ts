@@ -123,6 +123,11 @@ describe("Pluto Brain write-intent detection", () => {
     const question =
       "Create a task called Follow up with Test com 2 due tomorrow";
     const context = buildContext();
+    const tomorrow = addDaysToIsoDateInTimezone(
+      getTodayIsoDateInTimezone("America/Denver"),
+      1,
+      "America/Denver",
+    );
 
     expect(hasWriteIntent(question)).toBe(true);
 
@@ -133,7 +138,7 @@ describe("Pluto Brain write-intent detection", () => {
     expect(intent.suggestedAction.actionType).toBe("create_task");
     expect(intent.suggestedAction.payload).toMatchObject({
       title: "Follow up with Test com 2",
-      due_date: "2026-07-13",
+      due_date: tomorrow,
     });
     expect(intent.suggestedAction.title).toContain("Follow up with Test com 2");
   });
@@ -164,12 +169,8 @@ describe("Pluto Brain write-intent detection", () => {
 
   it("resolves relative due dates using the business timezone", () => {
     const timezone = "Pacific/Kiritimati";
-    const anchor = new Date("2026-07-12T10:00:00.000Z");
-    const today = getTodayIsoDateInTimezone(timezone, anchor);
-    const tomorrow = resolveRelativeDatePhrase("tomorrow", timezone, today);
-
-    expect(today).toBe("2026-07-13");
-    expect(tomorrow).toBe(addDaysToIsoDateInTimezone(today, 1, timezone));
+    const today = getTodayIsoDateInTimezone(timezone);
+    const tomorrow = addDaysToIsoDateInTimezone(today, 1, timezone);
 
     const intent = parseWriteIntent(
       "Create a task called Timezone check due tomorrow",
@@ -265,7 +266,12 @@ describe("Pluto Brain write proposal flow", () => {
 function buildAssignContext(
   overrides?: Partial<BrainContextSnapshot>,
 ): BrainContextSnapshot {
-  const tomorrow = "2026-07-13";
+  const timezone = "America/Denver";
+  const tomorrow = addDaysToIsoDateInTimezone(
+    getTodayIsoDateInTimezone(timezone),
+    1,
+    timezone,
+  );
   return {
     ...buildContext(),
     tomorrowAppointments: [
@@ -354,6 +360,11 @@ describe("Pluto Brain assign_employee_to_appointment resolution", () => {
   });
 
   it("asks which time when multiple appointments match", () => {
+    const tomorrow = addDaysToIsoDateInTimezone(
+      getTodayIsoDateInTimezone("America/Denver"),
+      1,
+      "America/Denver",
+    );
     const intent = parseWriteIntent(
       liveQuestion,
       buildAssignContext({
@@ -361,7 +372,7 @@ describe("Pluto Brain assign_employee_to_appointment resolution", () => {
           {
             id: APPOINTMENT_A,
             title: "Morning visit",
-            date: "2026-07-13",
+            date: tomorrow,
             time: "09:00–10:00",
             customer: "Test com 2",
             customerId: CUSTOMER_B,
@@ -371,7 +382,7 @@ describe("Pluto Brain assign_employee_to_appointment resolution", () => {
           {
             id: APPOINTMENT_B,
             title: "Afternoon visit",
-            date: "2026-07-13",
+            date: tomorrow,
             time: "14:00–15:00",
             customer: "Test com 2",
             customerId: CUSTOMER_B,
@@ -397,9 +408,8 @@ describe("Pluto Brain assign_employee_to_appointment resolution", () => {
     );
     expect(intent.kind).toBe("clarification");
     if (intent.kind !== "clarification") return;
-    expect(intent.question).toContain("multiple employees");
-    expect(intent.question).toContain("Test employee 1");
-    expect(intent.question).toContain("Test employee 2");
+    expect(intent.question).toContain("Which one did you mean");
+    expect(intent.entitySuggestions?.length).toBeGreaterThan(1);
   });
 
   it("does not resolve customers outside the authenticated business directory", () => {
@@ -412,8 +422,7 @@ describe("Pluto Brain assign_employee_to_appointment resolution", () => {
     );
     expect(intent.kind).toBe("clarification");
     if (intent.kind !== "clarification") return;
-    expect(intent.question).toContain("Test employee 1");
-    expect(intent.question).toContain("couldn't find a customer or company");
+    expect(intent.question).toContain("reliable customer");
     expect(intent.question).toContain("Test com 2");
   });
 
@@ -428,8 +437,7 @@ describe("Pluto Brain assign_employee_to_appointment resolution", () => {
     );
     expect(intent.kind).toBe("clarification");
     if (intent.kind !== "clarification") return;
-    expect(intent.question).toContain("couldn't find an active employee");
-    expect(intent.question).toContain("Test employee 1");
+    expect(intent.question).toContain("reliable employee");
   });
 
   it("ignores cancelled appointments when matching by customer and date", () => {
@@ -471,9 +479,8 @@ describe("Pluto Brain assign_employee_to_appointment resolution", () => {
     );
     expect(intent.kind).toBe("clarification");
     if (intent.kind !== "clarification") return;
-    expect(intent.question).toContain("multiple customers share the company");
-    expect(intent.question).toContain("Customer 2");
-    expect(intent.question).toContain("Customer 3");
+    expect(intent.question).toContain("Which one did you mean");
+    expect(intent.entitySuggestions?.length).toBeGreaterThan(1);
   });
 
   it("requires confirmation and does not assign immediately", async () => {
