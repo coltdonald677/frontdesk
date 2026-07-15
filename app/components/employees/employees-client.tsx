@@ -11,16 +11,27 @@ import {
 import type { EmployeeFocus } from "@/lib/dashboard/links";
 import type { EmployeeListStats } from "@/lib/employees";
 import type { Employee } from "@/lib/employees/types";
+import type { EmployeeQualificationListMeta } from "@/lib/qualifications/types";
 import { EmployeeAvatar } from "./employee-avatar";
 import { EmployeeFormModal } from "./employee-form-modal";
+import { EmployeeQualificationBadges } from "./employee-qualification-badges";
 import { EmployeeStatusBadge } from "./employee-status-badge";
 import { EmployeeWorkloadBar } from "./employee-workload-bar";
+
+type QualificationFilter =
+  | "all"
+  | "fully_qualified"
+  | "missing_requirement"
+  | "certification_expiring"
+  | "certification_expired"
+  | "training_overdue";
 
 type EmployeesClientProps = {
   employees: Employee[];
   statsByEmployeeId: Record<string, EmployeeListStats>;
   initialFocus?: EmployeeFocus;
   openNewEmployee?: boolean;
+  qualificationMetaByEmployeeId?: Record<string, EmployeeQualificationListMeta>;
 };
 
 function MiniStat({ label, value }: { label: string; value: number }) {
@@ -37,10 +48,16 @@ export function EmployeesClient({
   statsByEmployeeId,
   initialFocus,
   openNewEmployee = false,
+  qualificationMetaByEmployeeId = {},
 }: EmployeesClientProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [showQualificationFilters, setShowQualificationFilters] = useState(false);
+  const [qualificationFilter, setQualificationFilter] =
+    useState<QualificationFilter>("all");
+  const [skillFilter, setSkillFilter] = useState("");
+  const [certificationTypeFilter, setCertificationTypeFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -52,6 +69,28 @@ export function EmployeesClient({
       setModalOpen(true);
     }
   }, [openNewEmployee]);
+
+  const availableSkills = useMemo(() => {
+    const names = new Set<string>();
+    for (const meta of Object.values(qualificationMetaByEmployeeId)) {
+      for (const skill of meta.skillNames) {
+        names.add(skill);
+      }
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [qualificationMetaByEmployeeId]);
+
+  const availableCertificationTypes = useMemo(() => {
+    const types = new Set<string>();
+    for (const meta of Object.values(qualificationMetaByEmployeeId)) {
+      for (const type of meta.certificationTypes) {
+        types.add(type);
+      }
+    }
+    return [...types].sort((a, b) => a.localeCompare(b));
+  }, [qualificationMetaByEmployeeId]);
+
+  const hasQualificationData = Object.keys(qualificationMetaByEmployeeId).length > 0;
 
   const filteredEmployees = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -77,8 +116,41 @@ export function EmployeesClient({
       return haystack.includes(query);
     });
 
+    const qualificationFiltered = matches.filter((employee) => {
+      const meta = qualificationMetaByEmployeeId[employee.id];
+      if (!meta) {
+        return qualificationFilter === "all" && !skillFilter && !certificationTypeFilter;
+      }
+
+      if (skillFilter && !meta.skillNames.includes(skillFilter)) {
+        return false;
+      }
+
+      if (
+        certificationTypeFilter &&
+        !meta.certificationTypes.includes(certificationTypeFilter)
+      ) {
+        return false;
+      }
+
+      switch (qualificationFilter) {
+        case "fully_qualified":
+          return meta.fullyQualified && meta.expiredCount === 0;
+        case "missing_requirement":
+          return meta.missingRequirementCount > 0;
+        case "certification_expiring":
+          return meta.expiringSoonCount > 0;
+        case "certification_expired":
+          return meta.expiredCount > 0;
+        case "training_overdue":
+          return meta.overdueTrainingCount > 0;
+        default:
+          return true;
+      }
+    });
+
     if (initialFocus === "workload") {
-      return [...matches].sort((left, right) => {
+      return [...qualificationFiltered].sort((left, right) => {
         const leftWorkload =
           statsByEmployeeId[left.id]?.workloadPercentage ?? 0;
         const rightWorkload =
@@ -87,8 +159,18 @@ export function EmployeesClient({
       });
     }
 
-    return matches;
-  }, [employees, search, showArchived, initialFocus, statsByEmployeeId]);
+    return qualificationFiltered;
+  }, [
+    employees,
+    search,
+    showArchived,
+    initialFocus,
+    statsByEmployeeId,
+    qualificationFilter,
+    skillFilter,
+    certificationTypeFilter,
+    qualificationMetaByEmployeeId,
+  ]);
 
   const activeCount = useMemo(
     () => employees.filter((employee) => employee.status === "active").length,
@@ -184,6 +266,19 @@ export function EmployeesClient({
             />
             Show archived
           </label>
+          {hasQualificationData && (
+            <button
+              type="button"
+              onClick={() => setShowQualificationFilters((value) => !value)}
+              className={`inline-flex h-10 items-center rounded-lg border px-3 text-sm transition-colors ${
+                showQualificationFilters
+                  ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-200"
+                  : "border-white/[0.06] text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Qualification filters
+            </button>
+          )}
         </div>
 
         <button
@@ -194,6 +289,60 @@ export function EmployeesClient({
           Add employee
         </button>
       </div>
+
+      {showQualificationFilters && hasQualificationData && (
+        <div className="mb-4 rounded-xl border border-white/[0.06] bg-zinc-900/40 p-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="block text-xs text-zinc-400">
+              Status
+              <select
+                value={qualificationFilter}
+                onChange={(event) =>
+                  setQualificationFilter(event.target.value as QualificationFilter)
+                }
+                className="mt-1 h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-800/50 px-3 text-sm text-white"
+              >
+                <option value="all">All employees</option>
+                <option value="fully_qualified">Fully qualified</option>
+                <option value="missing_requirement">Missing requirement</option>
+                <option value="certification_expiring">Certification expiring</option>
+                <option value="certification_expired">Certification expired</option>
+                <option value="training_overdue">Training overdue</option>
+              </select>
+            </label>
+            <label className="block text-xs text-zinc-400">
+              Skill
+              <select
+                value={skillFilter}
+                onChange={(event) => setSkillFilter(event.target.value)}
+                className="mt-1 h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-800/50 px-3 text-sm text-white"
+              >
+                <option value="">Any skill</option>
+                {availableSkills.map((skill) => (
+                  <option key={skill} value={skill}>
+                    {skill}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs text-zinc-400">
+              Certification type
+              <select
+                value={certificationTypeFilter}
+                onChange={(event) => setCertificationTypeFilter(event.target.value)}
+                className="mt-1 h-9 w-full rounded-lg border border-white/[0.06] bg-zinc-800/50 px-3 text-sm text-white"
+              >
+                <option value="">Any type</option>
+                {availableCertificationTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
 
       {initialFocus === "workload" && (
         <div className="mb-4 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-4 py-3 text-sm text-indigo-200">
@@ -266,6 +415,9 @@ export function EmployeesClient({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filteredEmployees.map((employee) => {
             const stats = statsByEmployeeId[employee.id] ?? emptyStats;
+            const qualificationMeta = qualificationMetaByEmployeeId[employee.id];
+            const showQualificationBadges =
+              showQualificationFilters && qualificationMeta;
 
             return (
               <article
@@ -297,6 +449,12 @@ export function EmployeesClient({
                         <p className="mt-1 truncate text-xs text-zinc-500">
                           {employee.email || employee.phone}
                         </p>
+                      )}
+                      {showQualificationBadges && (
+                        <EmployeeQualificationBadges
+                          meta={qualificationMeta}
+                          compact
+                        />
                       )}
                     </div>
                   </div>

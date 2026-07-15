@@ -302,6 +302,21 @@ This document does **not** infer applied status from application code or prior a
 
 ---
 
+## 20. `20260715000000_employee_qualifications_phase1.sql`
+
+| Field | Detail |
+|---|---|
+| **Purpose** | **Employee qualifications phase 1:** Skills, certifications, training records, business requirements, overrides, document storage, expiry notifications. |
+| **Tables / columns** | Enums for certification status, verification, proficiency, training result, requirement severity/item type; tables `business_skills`, `employee_skills`, `employee_certifications`, `employee_training_records`, `qualification_requirements`, `qualification_requirement_items`, `employee_requirement_overrides`, `employee_qualification_documents`, `qualification_document_audit`; private storage bucket `employee-qualification-documents`. |
+| **Dependencies** | `business_profiles`, `employees` |
+| **Required for current code** | **Yes** — Employee qualifications tab, certification dashboard, scheduling qualification checks, expiry notifications |
+| **Safe verification query** | `select count(*) from information_schema.tables where table_schema = 'public' and table_name in ('business_skills','employee_certifications','qualification_requirements');` → expect `3`. |
+| **Rollback concerns** | Drops all qualification data and private document bucket policies. |
+| **Status detectable from repo code** | Partially — extensive TypeScript and RLS references |
+| **DB status** | UNKNOWN |
+
+---
+
 ## Quick pre-flight for manual testing
 
 Run this read-only bundle in Supabase SQL editor before Sessions A–C:
@@ -315,7 +330,8 @@ where table_schema = 'public'
     'business_profiles', 'customers', 'employees', 'appointments',
     'pluto_actions', 'invoices',
     'schedule_series', 'schedule_entries', 'schedule_entry_employees',
-    'brain_audit_logs'
+    'brain_audit_logs',
+    'business_skills', 'employee_certifications', 'qualification_requirements'
   )
 order by table_name;
 
@@ -343,13 +359,14 @@ If any expected row is missing, mark the corresponding migration **MISSING** and
 
 ## Potentially unapplied migrations (requires Supabase check)
 
-Until verification queries are run, treat **all 19 migrations** as potentially unapplied. Highest risk if missing:
+Until verification queries are run, treat **all 20 migrations** as potentially unapplied. Highest risk if missing:
 
 1. `20260713000000_workforce_scheduling_phase1.sql` — Employee Schedule pages fail
 2. `20260714000000_workforce_series_management.sql` — Series edit/stop/exception features fail
-3. `20260712000000_brain_phase1.sql` — Brain logging RPC errors; idempotency index missing
-4. `20260711200000_invoice_payment_security_hardening.sql` — Payment recording behavior undefined
-5. `20260711210000_communication_ownership_security_hardening.sql` — Weaker communication RLS
+3. `20260715000000_employee_qualifications_phase1.sql` — Qualifications UI and scheduling checks fail
+4. `20260712000000_brain_phase1.sql` — Brain logging RPC errors; idempotency index missing
+5. `20260711200000_invoice_payment_security_hardening.sql` — Payment recording behavior undefined
+6. `20260711210000_communication_ownership_security_hardening.sql` — Weaker communication RLS
 
 ---
 

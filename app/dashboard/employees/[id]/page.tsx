@@ -12,6 +12,7 @@ import {
   getEmployeeWorkspaceStats,
 } from "@/lib/employees";
 import { createClient } from "@/lib/supabase/server";
+import { loadEmployeeQualificationBundle } from "@/app/dashboard/employees/qualifications-actions";
 
 function getUserDisplay(user: {
   email?: string;
@@ -28,12 +29,15 @@ function getUserDisplay(user: {
 
 type EmployeeDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 };
 
 export default async function EmployeeDetailPage({
   params,
+  searchParams,
 }: EmployeeDetailPageProps) {
   const { id } = await params;
+  const { tab } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -53,6 +57,7 @@ export default async function EmployeeDetailPage({
     upcomingAppointments,
     tasks,
     recentActivity,
+    qualificationBundle,
   ] = await Promise.all([
     getEmployeeWorkspaceStats(id),
     getEmployeeTodayAppointments(id),
@@ -60,7 +65,18 @@ export default async function EmployeeDetailPage({
     getEmployeeUpcomingAppointments(id),
     getEmployeeTasks(id),
     getEmployeeRecentActivity(id),
+    loadEmployeeQualificationBundle(id).catch(() => null),
   ]);
+
+  const qualifications = qualificationBundle
+    ? {
+        skillsCatalog: qualificationBundle.skillsCatalog,
+        certifications: qualificationBundle.certifications,
+        skills: qualificationBundle.skills,
+        training: qualificationBundle.training,
+        summary: qualificationBundle.summary,
+      }
+    : null;
 
   const { displayName, initials } = getUserDisplay(user!);
 
@@ -75,6 +91,8 @@ export default async function EmployeeDetailPage({
           upcomingAppointments={upcomingAppointments}
           tasks={tasks}
           recentActivity={recentActivity}
+          qualifications={qualifications}
+          initialTab={tab}
         />
       </div>
     </DashboardShell>

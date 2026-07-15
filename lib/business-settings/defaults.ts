@@ -59,6 +59,7 @@ export function defaultEmployeeSettings(): EmployeeSettings {
     workloadBalancingEnabled: true,
     allowAssignmentsOutsideWorkingHours: false,
     recommendReassignmentWhenUneven: true,
+    qualificationExpiryReminderDays: [90, 60, 30, 7, 0],
   };
 }
 

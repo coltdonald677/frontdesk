@@ -50,6 +50,8 @@ export type EmployeeSettings = {
   workloadBalancingEnabled: boolean;
   allowAssignmentsOutsideWorkingHours: boolean;
   recommendReassignmentWhenUneven: boolean;
+  /** Days before certification expiry to send reminders (e.g. 90, 60, 30, 7, 0). */
+  qualificationExpiryReminderDays: number[];
 };
 
 export type InvoicePaymentTerm = "receipt" | "7" | "14" | "30" | "custom";

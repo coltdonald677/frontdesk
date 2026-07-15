@@ -19,6 +19,14 @@ import { EmployeeAvatar } from "./employee-avatar";
 import { EmployeeFormModal } from "./employee-form-modal";
 import { EmployeeStatusBadge } from "./employee-status-badge";
 import { EmployeeWorkloadBar } from "./employee-workload-bar";
+import { EmployeeQualificationsPanel } from "./employee-qualifications-panel";
+import type {
+  BusinessSkill,
+  EmployeeCertification,
+  EmployeeQualificationSummary,
+  EmployeeSkill,
+  EmployeeTrainingRecord,
+} from "@/lib/qualifications/types";
 
 type EmployeeAppointment = {
   id: string;
@@ -48,10 +56,19 @@ type EmployeeWorkspaceClientProps = {
   upcomingAppointments: EmployeeAppointment[];
   tasks: EmployeeTask[];
   recentActivity: EmployeeActivityItem[];
+  qualifications?: {
+    skillsCatalog: BusinessSkill[];
+    certifications: EmployeeCertification[];
+    skills: EmployeeSkill[];
+    training: EmployeeTrainingRecord[];
+    summary: EmployeeQualificationSummary | null;
+  } | null;
+  initialTab?: string;
 };
 
 const TABS = [
   { id: "overview", label: "Overview" },
+  { id: "qualifications", label: "Qualifications" },
   { id: "appointments", label: "Appointments" },
   { id: "tasks", label: "Tasks" },
   { id: "activity", label: "Activity" },
@@ -184,9 +201,13 @@ export function EmployeeWorkspaceClient({
   upcomingAppointments,
   tasks,
   recentActivity,
+  qualifications,
+  initialTab,
 }: EmployeeWorkspaceClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const defaultTab =
+    initialTab === "qualifications" ? "qualifications" : "overview";
+  const [activeTab, setActiveTab] = useState<TabId>(defaultTab as TabId);
   const [editOpen, setEditOpen] = useState(false);
 
   const openTasks = tasks.filter((task) => task.status === "open");
@@ -441,6 +462,23 @@ export function EmployeeWorkspaceClient({
               )}
             </div>
           </div>
+        )}
+
+        {activeTab === "qualifications" && (
+          qualifications ? (
+            <EmployeeQualificationsPanel
+              employeeId={employee.id}
+              skillsCatalog={qualifications.skillsCatalog}
+              certifications={qualifications.certifications}
+              skills={qualifications.skills}
+              training={qualifications.training}
+              summary={qualifications.summary}
+            />
+          ) : (
+            <p className="text-sm text-zinc-500">
+              Qualification records are unavailable until the employee qualifications migration is applied in Supabase.
+            </p>
+          )
         )}
 
         {activeTab === "appointments" && (

@@ -11,10 +11,14 @@ import {
 } from "@/lib/tasks/types";
 import { createClient } from "@/lib/supabase/server";
 import { verifyEmployeeOwnership } from "@/app/dashboard/employees/actions";
+import { checkAssignmentQualifications } from "@/lib/qualifications/scheduling-integration";
+import { getTodayIsoDateInTimezone } from "@/lib/brain/timezone-dates";
+import { loadBusinessSettings } from "@/lib/business-settings/service";
 
 export type TaskActionState = {
   error?: string;
   success?: boolean;
+  warnings?: string[];
 };
 
 async function getBusinessContext() {
@@ -47,6 +51,9 @@ function parseTaskForm(formData: FormData) {
   const priority = String(formData.get("priority") ?? "").trim();
   const customerId = String(formData.get("customer_id") ?? "").trim();
   const employeeId = String(formData.get("employee_id") ?? "").trim();
+  const qualificationOverrideReason = String(
+    formData.get("qualification_override_reason") ?? "",
+  ).trim();
 
   return {
     title,
@@ -55,6 +62,7 @@ function parseTaskForm(formData: FormData) {
     priority,
     customer_id: customerId || null,
     employee_id: employeeId || null,
+    qualification_override_reason: qualificationOverrideReason || null,
   };
 }
 
@@ -86,6 +94,31 @@ function revalidateTaskPaths(
   }
   if (employeeId) {
     revalidatePath(`/dashboard/employees/${employeeId}`);
+  }
+}
+
+async function checkTaskQualifications(
+  businessProfileId: string,
+  task: ReturnType<typeof parseTaskForm>,
+): Promise<{ error?: string; warnings: string[] }> {
+  if (!task.employee_id) {
+    return { warnings: [] };
+  }
+
+  try {
+    const settings = await loadBusinessSettings();
+    const today = getTodayIsoDateInTimezone(settings.profile.timezone ?? "America/Denver");
+    const assignmentDate = task.due_date ?? today;
+
+    return await checkAssignmentQualifications(businessProfileId, {
+      employeeIds: [task.employee_id],
+      entryType: "job_assignment",
+      startDate: assignmentDate,
+      endDate: assignmentDate,
+      overrideReason: task.qualification_override_reason,
+    });
+  } catch {
+    return { warnings: [] };
   }
 }
 
@@ -128,6 +161,18 @@ export async function createTask(
     }
   }
 
+  let qualificationWarnings: string[] = [];
+  if (task.employee_id) {
+    const qualification = await checkTaskQualifications(profile.id, task);
+    if (qualification.error) {
+      return {
+        error: qualification.error,
+        warnings: qualification.warnings,
+      };
+    }
+    qualificationWarnings = qualification.warnings;
+  }
+
   const { error } = await supabase.from("tasks").insert({
     business_profile_id: profile.id,
     customer_id: task.customer_id,
@@ -143,7 +188,10 @@ export async function createTask(
   }
 
   revalidateTaskPaths(task.customer_id, task.employee_id);
-  return { success: true };
+  return {
+    success: true,
+    warnings: qualificationWarnings.length > 0 ? qualificationWarnings : undefined,
+  };
 }
 
 export async function completeTask(taskId: string): Promise<TaskActionState> {

@@ -318,6 +318,35 @@ export function AppointmentDetailModal({
             </div>
           )}
 
+          {state.warnings && state.warnings.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              <p className="font-medium">Qualification warnings</p>
+              <ul className="list-disc space-y-1 pl-4 text-amber-200/90">
+                {state.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(state.error?.includes("manager override") ||
+            state.warnings?.some((warning) =>
+              /required|expired|revoked|pending verification/i.test(warning),
+            )) && (
+            <div>
+              <label className={labelClassName} htmlFor="qualification_override_reason">
+                Manager override reason
+              </label>
+              <textarea
+                id="qualification_override_reason"
+                name="qualification_override_reason"
+                rows={3}
+                placeholder="Explain why this assignment should proceed despite qualification warnings…"
+                className={`${inputClassName} resize-none`}
+              />
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 border-t border-white/[0.06] pt-4">
             <button
               type="button"

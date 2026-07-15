@@ -27,10 +27,12 @@ import {
 } from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 import { verifyEmployeeOwnership } from "@/app/dashboard/employees/actions";
+import { checkAssignmentQualifications } from "@/lib/qualifications/scheduling-integration";
 
 export type AppointmentActionState = {
   error?: string;
   success?: boolean;
+  warnings?: string[];
 };
 
 async function getBusinessContext() {
@@ -65,6 +67,9 @@ function parseAppointmentForm(formData: FormData) {
   const endTime = String(formData.get("end_time") ?? "").trim();
   const status = String(formData.get("status") ?? "scheduled").trim();
   const employeeId = String(formData.get("employee_id") ?? "").trim();
+  const qualificationOverrideReason = String(
+    formData.get("qualification_override_reason") ?? "",
+  ).trim();
 
   return {
     customer_id: customerId,
@@ -75,6 +80,7 @@ function parseAppointmentForm(formData: FormData) {
     end_time: endTime,
     status,
     employee_id: employeeId || null,
+    qualification_override_reason: qualificationOverrideReason || null,
   };
 }
 
@@ -171,6 +177,27 @@ function revalidateSchedulePaths(customerId?: string, employeeId?: string | null
   }
 }
 
+async function checkAppointmentQualifications(
+  businessProfileId: string,
+  appointment: ReturnType<typeof parseAppointmentForm>,
+): Promise<{ error?: string; warnings: string[] }> {
+  if (!appointment.employee_id) {
+    return { warnings: [] };
+  }
+
+  try {
+    return await checkAssignmentQualifications(businessProfileId, {
+      employeeIds: [appointment.employee_id],
+      entryType: "customer_appointment",
+      startDate: appointment.appointment_date,
+      endDate: appointment.appointment_date,
+      overrideReason: appointment.qualification_override_reason,
+    });
+  } catch {
+    return { warnings: [] };
+  }
+}
+
 export async function createAppointment(
   _prevState: AppointmentActionState,
   formData: FormData,
@@ -203,6 +230,21 @@ export async function createAppointment(
     if (!employeeOwned) {
       return { error: "Employee not found." };
     }
+  }
+
+  let qualificationWarnings: string[] = [];
+  if (appointment.employee_id) {
+    const qualification = await checkAppointmentQualifications(
+      profile.id,
+      appointment,
+    );
+    if (qualification.error) {
+      return {
+        error: qualification.error,
+        warnings: qualification.warnings,
+      };
+    }
+    qualificationWarnings = qualification.warnings;
   }
 
   const { data: created, error } = await supabase
@@ -246,11 +288,15 @@ export async function createAppointment(
         automationError instanceof Error
           ? automationError.message
           : "Appointment saved but automation could not run.",
+      warnings: qualificationWarnings.length > 0 ? qualificationWarnings : undefined,
     };
   }
 
   revalidateSchedulePaths(appointment.customer_id, appointment.employee_id);
-  return { success: true };
+  return {
+    success: true,
+    warnings: qualificationWarnings.length > 0 ? qualificationWarnings : undefined,
+  };
 }
 
 export async function updateAppointment(
@@ -301,6 +347,21 @@ export async function updateAppointment(
     if (!employeeOwned) {
       return { error: "Employee not found." };
     }
+  }
+
+  let qualificationWarnings: string[] = [];
+  if (appointment.employee_id) {
+    const qualification = await checkAppointmentQualifications(
+      profile.id,
+      appointment,
+    );
+    if (qualification.error) {
+      return {
+        error: qualification.error,
+        warnings: qualification.warnings,
+      };
+    }
+    qualificationWarnings = qualification.warnings;
   }
 
   const { error } = await supabase
@@ -375,7 +436,10 @@ export async function updateAppointment(
   }
 
   revalidateSchedulePaths(appointment.customer_id, appointment.employee_id);
-  return { success: true };
+  return {
+    success: true,
+    warnings: qualificationWarnings.length > 0 ? qualificationWarnings : undefined,
+  };
 }
 
 export async function moveAppointmentDate(

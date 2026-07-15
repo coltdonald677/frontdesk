@@ -258,6 +258,22 @@ export type BrainContextSnapshot = {
   businessOperatingSettings: Record<string, unknown>;
   operationalFindings: OperationalFinding[];
   contextFocus: string;
+  /** Structured qualification data for future Pluto workforce intents. */
+  qualificationContext?: {
+    expiringCertifications: Array<{
+      employeeId: string;
+      employeeName: string;
+      certificationName: string;
+      expiryDate: string;
+      daysUntilExpiry: number;
+    }>;
+    employeesMissingRequirements: Array<{
+      employeeId: string;
+      employeeName: string;
+      requirementName: string;
+    }>;
+    qualifiedEmployeeCount: number;
+  };
 };
 
 export type BrainToolDefinition = {

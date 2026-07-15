@@ -50,6 +50,7 @@ import {
 } from "@/lib/schedule-entries/series-service";
 import { isValidSeriesEditScope } from "@/lib/schedule-entries/series-management";
 import type { SeriesEditScope } from "@/lib/schedule-entries/types";
+import { checkAssignmentQualifications } from "@/lib/qualifications/scheduling-integration";
 import { buildUnifiedSchedule } from "@/lib/schedule-entries/unified";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -108,6 +109,9 @@ function parseScheduleEntryForm(formData: FormData) {
     ? recurringDaysRaw.split(",").map((d) => Number(d.trim())).filter((d) => !Number.isNaN(d))
     : [];
   const seriesEndDate = String(formData.get("series_end_date") ?? "").trim() || null;
+  const qualificationOverrideReason = String(
+    formData.get("qualification_override_reason") ?? "",
+  ).trim();
 
   return {
     entry_type: entryType,
@@ -125,6 +129,7 @@ function parseScheduleEntryForm(formData: FormData) {
     is_recurring: isRecurring,
     recurring_days: recurringDays,
     series_end_date: seriesEndDate,
+    qualification_override_reason: qualificationOverrideReason || null,
   };
 }
 
@@ -228,6 +233,20 @@ async function checkOwnershipAndConflicts(
     warnings.push(...buildConflictWarnings(target, existingBlocks));
   }
 
+  const qualification = await checkAssignmentQualifications(businessProfileId, {
+    employeeIds: input.employee_ids,
+    entryType: input.entry_type,
+    startDate: input.start_date,
+    endDate: input.end_date,
+    overrideReason: input.qualification_override_reason,
+  });
+
+  if (qualification.error) {
+    return { error: qualification.error, warnings: [...warnings, ...qualification.warnings] };
+  }
+
+  warnings.push(...qualification.warnings);
+
   return { warnings: [...new Set(warnings)] };
 }
 
@@ -256,6 +275,7 @@ export async function createScheduleEntryAction(
     timezone: parsed.timezone,
     employee_ids: parsed.employee_ids,
     source: "manual",
+    qualification_override_reason: parsed.qualification_override_reason,
   };
 
   const validation = validateScheduleEntryInput(input);
@@ -396,6 +416,7 @@ export async function updateScheduleEntryAction(
     all_day: parsed.all_day,
     timezone: parsed.timezone,
     employee_ids: parsed.employee_ids,
+    qualification_override_reason: parsed.qualification_override_reason,
   };
 
   const validation = validateScheduleEntryInput(input);
@@ -654,6 +675,7 @@ export async function updateScheduleEntryScopedAction(
     all_day: parsed.all_day,
     timezone: parsed.timezone,
     employee_ids: parsed.employee_ids,
+    qualification_override_reason: parsed.qualification_override_reason,
   };
 
   const validation = validateScheduleEntryInput(input);

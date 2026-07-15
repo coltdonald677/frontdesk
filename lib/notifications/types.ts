@@ -69,6 +69,8 @@ export const NOTIFICATION_TYPES = {
   AUTOMATION_SUCCESS: "automation.success",
   AUTOMATION_FAILED: "automation.failed",
   RECOMMENDATION_CRITICAL: "recommendation.critical",
+  CERTIFICATION_EXPIRING: "employee.certification.expiring",
+  CERTIFICATION_EXPIRED: "employee.certification.expired",
 } as const;
 
 export const SEVERITY_STYLES: Record<

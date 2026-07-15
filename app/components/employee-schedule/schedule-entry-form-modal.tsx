@@ -600,6 +600,27 @@ export function ScheduleEntryFormModal({
 
           <input type="hidden" name="timezone" value="America/Denver" />
 
+          {(state.error?.includes("manager override") ||
+            state.warnings?.some((warning) =>
+              /required|expired|revoked|pending verification/i.test(warning),
+            )) && (
+            <div>
+              <label className={labelClassName} htmlFor="qualification_override_reason">
+                Manager override reason
+              </label>
+              <textarea
+                id="qualification_override_reason"
+                name="qualification_override_reason"
+                rows={3}
+                placeholder="Explain why this assignment should proceed despite qualification warnings…"
+                className={inputClassName}
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Required when blocking qualification requirements are not met.
+              </p>
+            </div>
+          )}
+
           <div className="flex flex-wrap justify-between gap-3 pt-2">
             {isEditing ? (
               <button

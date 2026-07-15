@@ -87,6 +87,13 @@ const REQUIRED_FRAGMENTS = {
     /predecessor_series_id/i,
     /stopped_at_date/i,
   ],
+  "20260715000000_employee_qualifications_phase1.sql": [
+    /business_skills/i,
+    /employee_certifications/i,
+    /employee_training_records/i,
+    /qualification_requirements/i,
+    /employee-qualification-documents/i,
+  ],
 };
 
 function fail(message) {

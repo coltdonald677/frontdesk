@@ -1,5 +1,7 @@
 import { DashboardShell } from "@/app/components/dashboard/dashboard-shell";
 import { EmployeesClient } from "@/app/components/employees/employees-client";
+import { EmployeesQualificationsDashboard } from "@/app/components/employees/employees-qualifications-dashboard";
+import { loadQualificationsDashboard, loadEmployeeQualificationListMeta } from "@/app/dashboard/employees/qualifications-actions";
 import { getBusinessProfile } from "@/lib/business-profile";
 import { getEmployees, getEmployeesListStats } from "@/lib/employees";
 import { parseEmployeeFocus } from "@/lib/dashboard/links";
@@ -19,7 +21,7 @@ function getUserDisplay(user: {
 }
 
 type EmployeesPageProps = {
-  searchParams: Promise<{ focus?: string; new?: string }>;
+  searchParams: Promise<{ focus?: string; new?: string; view?: string }>;
 };
 
 export default async function EmployeesPage({
@@ -34,12 +36,21 @@ export default async function EmployeesPage({
   const params = await searchParams;
   const initialFocus = parseEmployeeFocus(params.focus);
   const openNewEmployee = params.new === "employee";
+  const showQualificationsView = params.view === "qualifications";
   const employees = await getEmployees(profile!.id, { includeInactive: true });
   const statsMap = await getEmployeesListStats(
     profile!.id,
     employees.map((employee) => employee.id),
   );
   const statsByEmployeeId = Object.fromEntries(statsMap);
+  const qualificationsDashboard = showQualificationsView
+    ? await loadQualificationsDashboard().catch(() => null)
+    : null;
+  const qualificationMetaByEmployeeId = !showQualificationsView
+    ? await loadEmployeeQualificationListMeta(
+        employees.map((employee) => employee.id),
+      ).catch(() => ({}))
+    : {};
   const { displayName, initials } = getUserDisplay(user!);
 
   return (
@@ -55,12 +66,50 @@ export default async function EmployeesPage({
           </p>
         </div>
 
-        <EmployeesClient
-          employees={employees}
-          statsByEmployeeId={statsByEmployeeId}
-          initialFocus={initialFocus}
-          openNewEmployee={openNewEmployee}
-        />
+        <div className="mb-6 flex flex-wrap gap-2">
+          <a
+            href="/dashboard/employees"
+            className={`rounded-lg border px-3 py-1.5 text-sm ${
+              !showQualificationsView
+                ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-200"
+                : "border-white/[0.06] text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Team list
+          </a>
+          <a
+            href="/dashboard/employees?view=qualifications"
+            className={`rounded-lg border px-3 py-1.5 text-sm ${
+              showQualificationsView
+                ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-200"
+                : "border-white/[0.06] text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Certifications & training
+          </a>
+        </div>
+
+        {showQualificationsView && qualificationsDashboard ? (
+          <EmployeesQualificationsDashboard
+            requirements={qualificationsDashboard.requirements}
+            expiringCertifications={qualificationsDashboard.expiring30.map((cert) => ({
+              id: cert.id,
+              name: cert.name,
+              expiry_date: cert.expiry_date,
+              employee_name: cert.employee_name,
+              employee_id: cert.employee_id,
+              status: cert.status,
+            }))}
+          />
+        ) : (
+          <EmployeesClient
+            employees={employees}
+            statsByEmployeeId={statsByEmployeeId}
+            initialFocus={initialFocus}
+            openNewEmployee={openNewEmployee}
+            qualificationMetaByEmployeeId={qualificationMetaByEmployeeId}
+          />
+        )}
       </div>
     </DashboardShell>
   );

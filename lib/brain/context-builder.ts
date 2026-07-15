@@ -22,6 +22,11 @@ import {
   summarizeBusinessSettingsForBrain,
 } from "@/lib/business-settings";
 import { getBrainConfig } from "./cost-controls";
+import { buildPlutoQualificationContext } from "@/lib/qualifications/brain-snapshot";
+import {
+  buildEmployeeQualificationSnapshots,
+  getQualificationRequirements,
+} from "@/lib/qualifications/service";
 import type { BrainContextSnapshot } from "./types";
 import { computeOperationalFindings } from "./deterministic-summaries";
 import type { ContextFocus } from "./prompts";
@@ -325,6 +330,37 @@ export async function buildBrainContext(
     operationalFindings: [],
     contextFocus: focus,
   };
+
+  try {
+    const expiringSoonDays = Math.max(
+      ...(businessSettings.employees.qualificationExpiryReminderDays ?? [30]).filter(
+        (day) => day > 0,
+      ),
+      30,
+    );
+    const [requirements, employeeSnapshots] = await Promise.all([
+      getQualificationRequirements(businessProfileId),
+      buildEmployeeQualificationSnapshots(
+        businessProfileId,
+        employees.map((employee) => employee.id),
+        today,
+        expiringSoonDays,
+      ),
+    ]);
+    const plutoQualifications = buildPlutoQualificationContext({
+      today,
+      expiringSoonDays,
+      employees: employeeSnapshots,
+      requirements,
+    });
+    snapshot.qualificationContext = {
+      expiringCertifications: plutoQualifications.expiringCertifications.slice(0, 12),
+      employeesMissingRequirements: plutoQualifications.missingRequirements.slice(0, 12),
+      qualifiedEmployeeCount: plutoQualifications.qualifiedEmployees.length,
+    };
+  } catch {
+    // Qualification tables may not be migrated yet.
+  }
 
   snapshot.operationalFindings = computeOperationalFindings(snapshot);
 

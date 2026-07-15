@@ -255,6 +255,7 @@ export type CreateScheduleEntryInput = {
   source?: ScheduleEntrySource;
   series_id?: string | null;
   occurrence_index?: number | null;
+  qualification_override_reason?: string | null;
 };
 
 export type CreateRecurringSeriesInput = {

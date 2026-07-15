@@ -113,6 +113,25 @@ export function EmployeeSettingsForm({ settings }: { settings: BusinessSettings 
       <SettingsToggle label="Workload balancing enabled" checked={e.workloadBalancingEnabled} onChange={(v) => section.setValue((c) => ({ ...c, workloadBalancingEnabled: v }))} />
       <SettingsToggle label="Allow assignments outside working hours" checked={e.allowAssignmentsOutsideWorkingHours} onChange={(v) => section.setValue((c) => ({ ...c, allowAssignmentsOutsideWorkingHours: v }))} />
       <SettingsToggle label="Recommend reassignment when uneven" checked={e.recommendReassignmentWhenUneven} onChange={(v) => section.setValue((c) => ({ ...c, recommendReassignmentWhenUneven: v }))} />
+      <SettingsField
+        label="Certification expiry reminder days"
+        hint="Comma-separated days before expiry to alert (e.g. 90, 60, 30, 7, 0 for expired/today)."
+      >
+        <SettingsTextInput
+          value={(e.qualificationExpiryReminderDays ?? [90, 60, 30, 7, 0]).join(", ")}
+          onChange={(ev) => {
+            const parsed = ev.target.value
+              .split(",")
+              .map((part) => Number(part.trim()))
+              .filter((value) => Number.isFinite(value) && value >= 0);
+            section.setValue((c) => ({
+              ...c,
+              qualificationExpiryReminderDays:
+                parsed.length > 0 ? parsed : [90, 60, 30, 7, 0],
+            }));
+          }}
+        />
+      </SettingsField>
     </SettingsFormShell>
   );
 }
