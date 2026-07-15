@@ -160,6 +160,16 @@ describe("split and stop cancellation targets", () => {
       "after",
     ]);
   });
+
+  it("stop date keeps the occurrence on the stop date itself", () => {
+    const stopTargets = [
+      entry({ id: "on-stop", start_date: "2026-08-03" }),
+      entry({ id: "after-stop", start_date: "2026-08-04" }),
+    ];
+    expect(entriesToCancelOnStop(stopTargets, "2026-08-03").map((item) => item.id)).toEqual([
+      "after-stop",
+    ]);
+  });
 });
 
 describe("occurrence linkage and duplicates", () => {
@@ -256,6 +266,28 @@ describe("recurrence formatting", () => {
     expect(
       formatRecurrencePattern("weekly", { daysOfWeek: [1, 2, 3, 4, 5] }),
     ).toBe("Every Mon, Tue, Wed, Thu, Fri");
+  });
+});
+
+describe("occurrence employee reassignment scope", () => {
+  it("reassigning one occurrence scopes edits to a single date", () => {
+    const entries = [
+      entry({ id: "mon", start_date: "2026-08-04" }),
+      entry({ id: "tue", start_date: "2026-08-05" }),
+      entry({ id: "wed", start_date: "2026-08-06" }),
+    ];
+    const scoped = filterEntriesByEditScope(entries, "2026-08-05", "this_occurrence");
+    expect(scoped).toHaveLength(1);
+    expect(scoped[0]?.id).toBe("tue");
+
+    const impact = computeSeriesEditImpact({
+      entries,
+      fromDate: "2026-08-05",
+      scope: "this_occurrence",
+      today: TODAY,
+    });
+    expect(impact.willSplitSeries).toBe(false);
+    expect(impact.affectedOccurrences).toBe(1);
   });
 });
 

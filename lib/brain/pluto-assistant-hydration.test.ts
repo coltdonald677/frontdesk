@@ -299,6 +299,21 @@ describe("createHydrationSafeAssistantControls", () => {
     expect(booleanProp(anyTruthy(false, !validation.valid))).toBe(true);
   });
 
+  it("Confirm and propose control remains in scrollable drawer body", () => {
+    const cardSource = readFileSync(
+      resolve(process.cwd(), "app/components/brain/brain-suggested-action-card.tsx"),
+      "utf8",
+    );
+    const drawerSource = readFileSync(
+      resolve(process.cwd(), "app/components/brain/pluto-assistant-drawer.tsx"),
+      "utf8",
+    );
+
+    expect(cardSource).toMatch(/Confirm & propose|Confirm/);
+    expect(drawerSource).toMatch(/min-h-0 flex-1 overflow-y-auto/);
+    expect(cardSource).not.toMatch(/fixed inset-0 z-50 flex items-center justify-center/);
+  });
+
   it("drawer restored after navigation uses pre-hydration defaults", () => {
     const restored = applyPlutoAskSuccess(
       createInitialPlutoAssistantState(),

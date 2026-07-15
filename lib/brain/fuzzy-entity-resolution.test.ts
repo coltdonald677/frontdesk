@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import {
+  addDaysToIsoDateInTimezone,
+  getTodayIsoDateInTimezone,
+} from "@/lib/brain/timezone-dates";
 import { continueAfterEntitySuggestionSelection } from "@/lib/brain/entity-clarification-resume";
 import {
   buildCustomerSuggestions,
@@ -165,6 +169,15 @@ describe("employee fuzzy resolution", () => {
       expect(outcome.entity.id).toBe(EMPLOYEE_JOHN);
     }
   });
+
+  it("excludes inactive employees from fuzzy suggestions", () => {
+    const suggestions = buildEmployeeSuggestions("Test employe", [
+      { id: EMPLOYEE_JON, name: "Test employe 1", status: "inactive" },
+      { id: EMPLOYEE_JOHN, name: "Test employe 2", status: "active" },
+    ]);
+    expect(suggestions.every((item) => item.entityId !== EMPLOYEE_JON)).toBe(true);
+    expect(suggestions.some((item) => item.entityId === EMPLOYEE_JOHN)).toBe(true);
+  });
 });
 
 describe("suggestion list rules", () => {
@@ -296,16 +309,21 @@ describe("assign employee integration", () => {
   });
 
   it("existing exact-match assign flow still resolves customer", () => {
+    const timezone = "America/Denver";
+    const today = getTodayIsoDateInTimezone(timezone);
+    const tomorrow = addDaysToIsoDateInTimezone(today, 1, timezone);
     const context = buildContext();
+    context.today = today;
+    context.tomorrow = tomorrow;
     context.tomorrowAppointments = [
       {
         id: "appt-1",
         title: "Visit",
-        date: "2026-07-14",
+        date: tomorrow,
         time: "09:00–10:00",
         startTime: "09:00",
         endTime: "10:00",
-        customer: "Customer 2",
+        customer: "Customer 2 — Test com 2",
         customerId: CUSTOMER_2,
         employee: null,
         employeeId: null,
@@ -314,7 +332,7 @@ describe("assign employee integration", () => {
       },
     ];
     const intent = parseWriteIntent(
-      "Assign John Smith to my appointment with Customer 2 tomorrow",
+      "Assign John Smith to my appointment with Test com 2 tomorrow",
       context,
     );
     expect(intent.kind).toBe("action");
